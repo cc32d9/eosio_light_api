@@ -14,13 +14,7 @@ CREATE TABLE TOKENAPI_LATEST_RESOURCE
  block_time        DATETIME NOT NULL,
  trx_id            VARCHAR(64) NOT NULL,
  cpu_weight        DOUBLE PRECISION NOT NULL,
- cpu_used          INTEGER NOT NULL DEFAULT 0,
- cpu_available     INTEGER NOT NULL DEFAULT 0,
- cpu_max           INTEGER NOT NULL DEFAULT 0,
  net_weight        DOUBLE PRECISION NOT NULL,
- net_used          INTEGER NOT NULL DEFAULT 0,
- net_available     INTEGER NOT NULL DEFAULT 0,
- net_max           INTEGER NOT NULL DEFAULT 0,
  ram_quota         INTEGER NOT NULL,
  ram_usage         INTEGER NOT NULL
 ) ENGINE=InnoDB;

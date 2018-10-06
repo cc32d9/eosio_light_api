@@ -51,13 +51,10 @@ die($DBI::errstr) unless $dbh;
 my $sth_inslastres = $dbh->prepare
     ('INSERT INTO TOKENAPI_LATEST_RESOURCE ' . 
      '(account_name, block_num, block_time, trx_id, ' .
-     'cpu_weight, cpu_used, cpu_available, cpu_max, ' .
-     'net_weight, net_used, net_available, net_max, ram_quota, ram_usage) ' .
-     'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ' .
+     'cpu_weight, net_weight, ram_quota, ram_usage) ' .
+     'VALUES(?,?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, ' .
-     'cpu_weight=?, cpu_used=?, cpu_available=?, cpu_max=?, ' .
-     'net_weight=?, net_used=?, net_available=?, net_max=?, ' .
-     'ram_quota=?, ram_usage=?');
+     'cpu_weight=?, net_weight=?, ram_quota=?, ram_usage=?');
 
 
 my $sth_inslastcurr = $dbh->prepare
@@ -109,30 +106,16 @@ while( zmq_msg_recv($msg, $socket) != -1 )
         {
             my $account = $bal->{'account_name'};
             
-            my $cpuw = $bal->{'cpu_weight'}/10000.0;
-            my $cpulu = $bal->{'cpu_limit'}{'used'};
-            my $cpula = $bal->{'cpu_limit'}{'available'};
-            my $cpulm = $bal->{'cpu_limit'}{'max'};
-            
+            my $cpuw = $bal->{'cpu_weight'}/10000.0;            
             my $netw = $bal->{'net_weight'}/10000.0;
-            my $netlu = $bal->{'net_limit'}{'used'};
-            my $netla = $bal->{'net_limit'}{'available'};
-            my $netlm = $bal->{'net_limit'}{'max'};
-            
             my $quota = $bal->{'ram_quota'};
             my $usage = $bal->{'ram_usage'};
                         
             $sth_inslastres->execute($account,
                                      $block_num, $block_time, $tx,
-                                     $cpuw, $cpulu, $cpula, $cpulm,
-                                     $netw, $netlu, $netla, $netlm,
-                                     $quota,
-                                     $usage,
+                                     $cpuw, $netw, $quota, $usage,
                                      $block_num, $block_time, $tx,
-                                     $cpuw, $cpulu, $cpula, $cpulm,
-                                     $netw, $netlu, $netla, $netlm,
-                                     $quota,
-                                     $usage);
+                                     $cpuw, $netw, $quota, $usage);
         }
         
         foreach my $bal (@{$action->{'currency_balances'}})
