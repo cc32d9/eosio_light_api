@@ -24,12 +24,13 @@ my $sth_res = $dbh->prepare
      'WHERE account_name=?');
 
 my $sth_bal = $dbh->prepare
-    ('SELECT block_num, block_time, trx_id, issuer, currency, amount ' .
+    ('SELECT block_num, block_time, trx_id, issuer AS contract, currency, amount ' .
      'FROM TOKENAPI_LATEST_CURRENCY ' .
      'WHERE account_name=?');
 
 
 my $json = JSON->new();
+my $jsonp = JSON->new()->pretty->canonical;
 
 my $builder = Plack::Builder->new;
 
@@ -48,8 +49,10 @@ $builder->mount
          }
 
          my $acc = $1;
+
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
          
-         my $result = {};
+         my $result = {'account_name' => $acc};
 
          $sth_res->execute($acc);
          $result->{'resources'} = $sth_res->fetchrow_hashref();
@@ -60,7 +63,7 @@ $builder->mount
          my $res = $req->new_response(200);
          $res->content_type('application/json');
 
-         $res->body($json->encode($result));
+         $res->body($j->encode($result));
          $res->finalize;
      });
 
