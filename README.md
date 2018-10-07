@@ -20,6 +20,11 @@ perl /opt/eos_zmq_token_api/scripts/tokenapi_dbwrite.pl --sub=tcp://10.0.0.1:600
 starman master --listen 127.0.0.1:5001 --workers 6 /opt/eos_zmq_token_api/api/token_api.psgi
 ```
 
+## Public API endpoint
+
+http://tokenapi.eoswatch.info/api/account/b1
+
+
 
 ## Copyright and License
 
