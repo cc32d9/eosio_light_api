@@ -47,6 +47,9 @@ my $dbh = DBI->connect($dsn, $db_user, $db_password,
                         mysql_server_prepare => 1});
 die($DBI::errstr) unless $dbh;
 
+my $sth_checkresblock = $dbh->prepare
+    ('SELECT block_num FROM TOKENAPI_LATEST_RESOURCE ' .
+     'WHERE account_name=?');
 
 my $sth_inslastres = $dbh->prepare
     ('INSERT INTO TOKENAPI_LATEST_RESOURCE ' . 
@@ -55,6 +58,11 @@ my $sth_inslastres = $dbh->prepare
      'VALUES(?,?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, ' .
      'cpu_weight=?, net_weight=?, ram_quota=?, ram_usage=?');
+
+
+my $sth_checkcurrblock = $dbh->prepare
+    ('SELECT block_num FROM TOKENAPI_LATEST_CURRENCY ' .
+     'WHERE account_name=? AND issuer=? AND currency=?');
 
 
 my $sth_inslastcurr = $dbh->prepare
@@ -106,6 +114,13 @@ while( zmq_msg_recv($msg, $socket) != -1 )
         {
             my $account = $bal->{'account_name'};
             
+            $sth_checkresblock->execute($account);
+            my $r = $sth_checkresblock->fetchall_arrayref();
+            if( scalar(@{$r}) > 0 and $r->[0][0] > $block_num )
+            {
+                next;
+            }
+            
             my $cpuw = $bal->{'cpu_weight'}/10000.0;            
             my $netw = $bal->{'net_weight'}/10000.0;
             my $quota = $bal->{'ram_quota'};
@@ -123,7 +138,14 @@ while( zmq_msg_recv($msg, $socket) != -1 )
             my $account = $bal->{'account_name'};
             my $issuer = $bal->{'issuer'};
             my ($amount, $currency) = split(/\s+/, $bal->{'balance'});
-                        
+
+            $sth_checkcurrblock->execute($account, $issuer, $currency);
+            my $r = $sth_checkcurrblock->fetchall_arrayref();
+            if( scalar(@{$r}) > 0 and $r->[0][0] > $block_num )
+            {
+                next;
+            }
+            
             $sth_inslastcurr->execute($account,
                                       $block_num, $block_time, $tx,
                                       $issuer,
