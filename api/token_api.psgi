@@ -70,6 +70,8 @@ $builder->mount
 
          $sth_bal->execute($acc);
          $result->{'balances'} = $sth_bal->fetchall_arrayref({});
+
+         $dbh->commit();
          
          my $res = $req->new_response(200);
          $res->content_type('application/json');
