@@ -71,6 +71,17 @@ my $sth_inslastcurr = $dbh->prepare
      'VALUES(?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?');
 
+my $sth_checkcontract = $dbh->prepare
+    ('SELECT block_num FROM TOKENAPI_CONTRACTS ' .
+     'WHERE account_name=? AND action_name=?');
+
+my $sth_inscontract = $dbh->prepare
+    ('INSERT INTO TOKENAPI_CONTRACTS ' . 
+     '(account_name, action_name, block_num, block_time, trx_id) ' .
+     'VALUES(?,?,?,?,?) ' .
+     'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?');
+
+
 
 my $ctxt = zmq_init;
 my $socket;
@@ -116,7 +127,7 @@ while( zmq_msg_recv($msg, $socket) != -1 )
             
             $sth_checkresblock->execute($account);
             my $r = $sth_checkresblock->fetchall_arrayref();
-            if( scalar(@{$r}) > 0 and $r->[0][0] > $block_num )
+            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
             {
                 next;
             }
@@ -141,7 +152,7 @@ while( zmq_msg_recv($msg, $socket) != -1 )
 
             $sth_checkcurrblock->execute($account, $issuer, $currency);
             my $r = $sth_checkcurrblock->fetchall_arrayref();
-            if( scalar(@{$r}) > 0 and $r->[0][0] > $block_num )
+            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
             {
                 next;
             }
@@ -153,7 +164,18 @@ while( zmq_msg_recv($msg, $socket) != -1 )
                                       $amount,
                                       $block_num, $block_time, $tx,
                                       $amount);
-        }        
+        }
+
+        my $act = $action->{'action_trace'}{'act'};
+        
+        $sth_checkcontract->execute($act->{'account'}, $act->{'name'});
+        my $r = $sth_checkcontract->fetchall_arrayref();
+        if( scalar(@{$r}) == 0 or $r->[0][0] < $block_num )
+        {
+            $sth_inscontract->execute($act->{'account'}, $act->{'name'},
+                                      $block_num, $block_time, $tx,
+                                      $block_num, $block_time, $tx);
+        }
     }
 
     $uncommitted++;
