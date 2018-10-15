@@ -54,15 +54,15 @@ my @res_columns = qw(account_name block_num block_time trx_id cpu_weight net_wei
 my $sth_getres = $dbhr->prepare
     ('SELECT ' . join(',', @res_columns) . ' ' .
      'FROM EOSIO_LATEST_RESOURCE JOIN EOSIO_ACTIONS ' .
-     ' ON EOSIO_LATEST_RESOURCE.global_action_seq=EOSIO_ACTIONS.global_action_seq ' .
+     ' ON EOSIO_LATEST_RESOURCE.global_seq=EOSIO_ACTIONS.global_action_seq ' .
      'WHERE account_name LIKE ?');
 
-my @bal_columns = qw(account_name block_num block_time trx_id issuer currency amount);
+my @bal_columns = qw(account_name block_num block_time trx_id contract currency amount);
 
 my $sth_getbal = $dbhr->prepare
     ('SELECT ' . join(',', @bal_columns) . ' ' .
      'FROM EOSIO_LATEST_CURRENCY JOIN EOSIO_ACTIONS ' .
-     ' ON EOSIO_LATEST_CURRENCY.global_action_seq=EOSIO_ACTIONS.global_action_seq ' .
+     ' ON EOSIO_LATEST_CURRENCY.global_seq=EOSIO_ACTIONS.global_action_seq ' .
      'WHERE account_name LIKE ?');
 
 
@@ -85,17 +85,17 @@ my @instres_columns =
 
 
 my $sth_checkbal = $dbhw->prepare
-    ('SELECT account_name, issuer, currency, block_num ' .
+    ('SELECT account_name, contract, currency, block_num ' .
      'FROM TOKENAPI_LATEST_CURRENCY WHERE account_name LIKE ?');
 
 my $sth_inslastcurr = $dbhw->prepare
     ('INSERT INTO TOKENAPI_LATEST_CURRENCY ' . 
-     '(account_name, block_num, block_time, trx_id, issuer, currency, amount) ' .
+     '(account_name, block_num, block_time, trx_id, contract, currency, amount) ' .
      'VALUES(?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?');
 
 my @instbal_columns =
-    qw(account_name block_num block_time trx_id issuer currency amount
+    qw(account_name block_num block_time trx_id contract currency amount
        block_num block_time trx_id amount);
 
 my $numrows = 0;
@@ -128,18 +128,18 @@ for my $prefix (@prefixes)
 
     {
         $sth_checkbal->execute($like);
-        my $ourblocks = $sth_checkbal->fetchall_hashref(['account_name', 'issuer', 'currency']);
+        my $ourblocks = $sth_checkbal->fetchall_hashref(['account_name', 'contract', 'currency']);
 
         $sth_getbal->execute($like);
         while(my $row = $sth_getbal->fetchrow_hashref('NAME_lc') )
         {
             my $acc = $row->{'account_name'};
-            my $issuer = $row->{'issuer'};
+            my $contract = $row->{'contract'};
             my $currency = $row->{'currency'};
             my $ourbl = 0;
-            if( defined($ourblocks->{$acc}{$issuer}{$currency}) )
+            if( defined($ourblocks->{$acc}{$contract}{$currency}) )
             {
-                $ourbl = $ourblocks->{$acc}{$issuer}{$currency}{'block_num'};
+                $ourbl = $ourblocks->{$acc}{$contract}{$currency}{'block_num'};
             }
 
             if( $row->{'block_num'} > $ourbl )

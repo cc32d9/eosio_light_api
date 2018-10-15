@@ -62,12 +62,12 @@ my $sth_inslastres = $dbh->prepare
 
 my $sth_checkcurrblock = $dbh->prepare
     ('SELECT block_num FROM TOKENAPI_LATEST_CURRENCY ' .
-     'WHERE account_name=? AND issuer=? AND currency=?');
+     'WHERE account_name=? AND contract=? AND currency=?');
 
 
 my $sth_inslastcurr = $dbh->prepare
     ('INSERT INTO TOKENAPI_LATEST_CURRENCY ' . 
-     '(account_name, block_num, block_time, trx_id, issuer, currency, amount) ' .
+     '(account_name, block_num, block_time, trx_id, contract, currency, amount) ' .
      'VALUES(?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?');
 
@@ -147,10 +147,10 @@ while( zmq_msg_recv($msg, $socket) != -1 )
         foreach my $bal (@{$action->{'currency_balances'}})
         {
             my $account = $bal->{'account_name'};
-            my $issuer = $bal->{'issuer'};
+            my $contract = $bal->{'contract'};
             my ($amount, $currency) = split(/\s+/, $bal->{'balance'});
 
-            $sth_checkcurrblock->execute($account, $issuer, $currency);
+            $sth_checkcurrblock->execute($account, $contract, $currency);
             my $r = $sth_checkcurrblock->fetchall_arrayref();
             if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
             {
@@ -159,7 +159,7 @@ while( zmq_msg_recv($msg, $socket) != -1 )
             
             $sth_inslastcurr->execute($account,
                                       $block_num, $block_time, $tx,
-                                      $issuer,
+                                      $contract,
                                       $currency,
                                       $amount,
                                       $block_num, $block_time, $tx,

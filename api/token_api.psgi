@@ -31,7 +31,7 @@ sub check_dbserver
              'WHERE account_name=?');
         
         $sth_bal = $dbh->prepare
-            ('SELECT block_num, block_time, trx_id, issuer AS contract, currency, amount ' .
+            ('SELECT block_num, block_time, trx_id, contract, currency, amount ' .
              'FROM TOKENAPI_LATEST_CURRENCY ' .
              'WHERE account_name=?');
     }
