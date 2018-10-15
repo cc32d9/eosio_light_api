@@ -85,22 +85,38 @@ my $sth_inscontract = $dbh->prepare
 
 my $ctxt = zmq_init;
 my $socket;
-
+my $connectstr;
+    
 if( defined($ep_pull) )
 {
+    $connectstr = $ep_pull;
     $socket = zmq_socket($ctxt, ZMQ_PULL);
-    my $rv = zmq_connect( $socket, $ep_pull );
+    my $rv = zmq_connect( $socket, $connectstr );
     die($!) if $rv;
 }
 else
 {
+    $connectstr = $ep_sub;
     $socket = zmq_socket($ctxt, ZMQ_SUB);
-    my $rv = zmq_connect( $socket, $ep_sub );
+    my $rv = zmq_connect( $socket, $connectstr );
     die($!) if $rv;
     $rv = zmq_setsockopt( $socket, ZMQ_SUBSCRIBE, pack('VV', 0, 0) );
     die($!) if $rv;
 }
 
+
+my $sighandler = sub {
+    print STDERR ("Disconnecting the ZMQ socket\n");
+    zmq_disconnect($socket, $connectstr);
+    zmq_close($socket);
+    print STDERR ("Finished\n");
+    exit;
+};
+
+
+$SIG{'HUP'} = $sighandler;
+$SIG{'TERM'} = $sighandler;
+$SIG{'INT'} = $sighandler;
 
 
 my $json = JSON->new->pretty->canonical;
