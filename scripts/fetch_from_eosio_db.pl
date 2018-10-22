@@ -6,11 +6,11 @@ use DBI;
 
 $| = 1;
 
-my $dsnr = 'DBI:mysql:database=eosio;host=localhost';
+my $dsnr = 'DBI:MariaDB:database=eosio;host=localhost';
 my $dbr_user = 'eosioro';
 my $dbr_password = 'eosioro';
 
-my $dsnw = 'DBI:mysql:database=tokenapi;host=localhost';
+my $dsnw = 'DBI:MariaDB:database=tokenapi;host=localhost';
 my $dbw_user = 'tokenapi';
 my $dbw_password = 'ce1Shish';
 
@@ -33,12 +33,12 @@ if( not $ok or scalar(@ARGV) > 0 )
 
 my $dbhr = DBI->connect($dsnr, $dbr_user, $dbr_password,
                         {'RaiseError' => 1, AutoCommit => 0,
-                         mysql_server_prepare => 1});
+                         mariadb_server_prepare => 1});
 die($DBI::errstr) unless $dbhr;
 
 my $dbhw = DBI->connect($dsnw, $dbw_user, $dbw_password,
                         {'RaiseError' => 1, AutoCommit => 0,
-                         mysql_server_prepare => 1});
+                         mariadb_server_prepare => 1});
 die($DBI::errstr) unless $dbhw;
 
 
