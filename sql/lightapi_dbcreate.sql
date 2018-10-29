@@ -42,7 +42,6 @@ CREATE TABLE LIGHTAPI_AUTH_THRESHOLDS
  account_name      VARCHAR(13) NOT NULL,
  perm              VARCHAR(13) NOT NULL,
  threshold         INT NOT NULL,
- parent            VARCHAR(13),
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
  trx_id            VARCHAR(64) NOT NULL

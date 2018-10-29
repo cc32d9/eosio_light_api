@@ -77,9 +77,12 @@ my $sth_check_auth_block = $dbh->prepare
 
 my $sth_ins_auth_thres = $dbh->prepare
     ('INSERT INTO LIGHTAPI_AUTH_THRESHOLDS ' . 
-     '(account_name, perm, threshold, parent, block_num, block_time, trx_id) ' .
-     'VALUES(?,?,?,?,?,?,?) ' .
-     'ON DUPLICATE KEY UPDATE threshold=?, parent=?,block_num=?, block_time=?, trx_id=?');
+     '(account_name, perm, threshold, block_num, block_time, trx_id) ' .
+     'VALUES(?,?,?,?,?,?) ' .
+     'ON DUPLICATE KEY UPDATE threshold=?, block_num=?, block_time=?, trx_id=?');
+
+my $sth_del_auth_thres = $dbh->prepare
+    ('DELETE FROM LIGHTAPI_AUTH_THRESHOLDS WHERE account_name=? AND perm=?');
 
 my $sth_del_auth_keys = $dbh->prepare
     ('DELETE FROM LIGHTAPI_AUTH_KEYS WHERE account_name=? AND perm=?');
@@ -193,14 +196,31 @@ while(1)
         }
 
         my $atrace = $action->{'action_trace'};
-        my $state = {'auth' => []};
+        my $state = {'addauth' => [], 'delauth' => []};
         process_trace($atrace, $state);
 
-        foreach my $authdata (@{$state->{'auth'}})
+        foreach my $authdata (@{$state->{'delauth'}})
         {
             my $account = $authdata->{'account'};
-            my $perm = $authdata->{'permission'};
-
+            my $perm = $authdata->{'perm'};
+            
+            $sth_check_auth_block->execute($account, $perm);
+            my $r = $sth_check_auth_block->fetchall_arrayref();
+            if( scalar(@{$r}) == 0 or $r->[0][0] >= $block_num )
+            {
+                next;
+            }
+            
+            $sth_del_auth_thres->execute($account, $perm);
+            $sth_del_auth_keys->execute($account, $perm);
+            $sth_del_auth_acc->execute($account, $perm);
+        }
+        
+        foreach my $authdata (@{$state->{'addauth'}})
+        {
+            my $account = $authdata->{'account'};
+            my $perm = $authdata->{'perm'};
+            
             $sth_check_auth_block->execute($account, $perm);
             my $r = $sth_check_auth_block->fetchall_arrayref();
             if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
@@ -208,24 +228,24 @@ while(1)
                 next;
             }
 
-            my $threshold = $authdata->{'auth'}{'threshold'};
-            my $parent = $authdata->{'parent'};
+            my $auth = $authdata->{'auth'};
+            my $threshold = $auth->{'threshold'};
 
             $sth_ins_auth_thres->execute
-                ($account, $perm, $threshold, $parent,
+                ($account, $perm, $threshold, 
                  $block_num, $block_time, $tx,
-                 $threshold, $parent, $block_num, $block_time, $tx);
+                 $threshold, $block_num, $block_time, $tx);
 
             $sth_del_auth_keys->execute($account, $perm);
             $sth_del_auth_acc->execute($account, $perm);
 
-            foreach my $keydata (@{$authdata->{'auth'}{'keys'}})
+            foreach my $keydata (@{$auth->{'keys'}})
             {
                 $sth_ins_auth_key->execute
                     ($account, $perm, $keydata->{'key'}, $keydata->{'weight'});
             }
             
-            foreach my $accdata (@{$authdata->{'auth'}{'accounts'}})
+            foreach my $accdata (@{$auth->{'accounts'}})
             {
                 $sth_ins_auth_acc->execute
                     ($account, $perm, $accdata->{'permission'}{'actor'},
@@ -242,6 +262,8 @@ while(1)
 print STDERR "The stream ended\n";
 $dbh->disconnect();
 
+
+    
 
 
 sub process_trace
@@ -260,9 +282,40 @@ sub process_trace
             my $aname = $act->{'name'};
             my $data = $act->{'data'};
 
-            if( ref($data) eq 'HASH' and $aname eq 'updateauth' )
+            if( ref($data) eq 'HASH' )
             {
-                push(@{$state->{'auth'}}, $data);
+                if( $aname eq 'newaccount' )
+                {
+                    push(@{$state->{'addauth'}},
+                         {
+                             'account' => $data->{'name'},
+                             'perm' => 'owner',
+                             'auth' => $data->{'owner'},
+                         });
+                    push(@{$state->{'addauth'}},
+                         {
+                             'account' => $data->{'name'},
+                             'perm' => 'active',
+                             'auth' => $data->{'active'},
+                         });
+                }
+                elsif( $aname eq 'updateauth' )
+                {
+                    push(@{$state->{'addauth'}},
+                         {
+                             'account' => $data->{'account'},
+                             'perm' => $data->{'permission'},
+                             'auth' => $data->{'auth'},
+                         });
+                }
+                elsif( $aname eq 'deleteauth' )
+                {
+                    push(@{$state->{'delauth'}},
+                         {
+                             'account' => $data->{'account'},
+                             'perm' => $data->{'permission'},
+                         });
+                }
             }
         }
     }
