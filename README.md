@@ -1,4 +1,4 @@
-# EOS ZMQ token API
+# EOS ZMQ Light API
 
 
 
@@ -12,11 +12,11 @@ libjson-xs-perl libjson-perl
 sudo cpanm DBD::MariaDB
 sudo cpanm ZMQ::Raw
 
-sudo mysql <sql/tokenapi_dbcreate.sql
+sudo mysql <sql/lightapi_dbcreate.sql
 
 sudo cpanm Starman
 
-perl /opt/eos_zmq_token_api/scripts/tokenapi_dbwrite.pl --sub=tcp://10.0.0.1:6003
+perl /opt/eos_zmq_token_api/scripts/lightapi_dbwrite.pl --sub=tcp://10.0.0.1:6003
 
 starman master --listen 127.0.0.1:5001 --workers 6 /opt/eos_zmq_token_api/api/token_api.psgi
 ```
