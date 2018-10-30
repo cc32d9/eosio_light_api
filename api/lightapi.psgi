@@ -11,12 +11,16 @@ my $db_user = 'lightapiro';
 my $db_password = 'lightapiro';
 
 my $dbh;
+
+my $sth_allnetworks;
 my $sth_getnet;
 my $sth_res;
 my $sth_bal;
 my $sth_perms;
 my $sth_keys;
 my $sth_authacc;
+my $sth_searchkey;
+my $sth_acc_by_actor;
 
 sub check_dbserver
 {
@@ -25,6 +29,10 @@ sub check_dbserver
                             {'RaiseError' => 1, AutoCommit => 0,
                              'mariadb_server_prepare' => 1});
         die($DBI::errstr) unless $dbh;
+
+        $sth_allnetworks = $dbh->prepare
+            ('SELECT network, chainid, description, systoken, decimals ' .
+             'FROM LIGHTAPI_NETWORKS');
 
         $sth_getnet = $dbh->prepare
             ('SELECT network, chainid, description, systoken, decimals ' .
@@ -56,7 +64,24 @@ sub check_dbserver
             ('SELECT actor, permission, weight ' .
              'FROM LIGHTAPI_AUTH_ACC ' .
              'WHERE network=? AND account_name=? AND perm=?');
+
+        $sth_searchkey = $dbh->prepare
+            ('SELECT network, account_name, perm, pubkey, weight ' .
+             'FROM LIGHTAPI_AUTH_KEYS ' .
+             'WHERE pubkey=?');
+
+        $sth_acc_by_actor = $dbh->prepare
+            ('SELECT account_name, perm ' .
+             'FROM LIGHTAPI_AUTH_ACC ' .
+             'WHERE network=? AND actor=? AND permission=?');
     }
+}
+
+
+sub get_allnetworks
+{
+    $sth_allnetworks->execute();
+    return $sth_allnetworks->fetchall_arrayref({});
 }
 
 
@@ -67,6 +92,48 @@ sub get_network
     my $r = $sth_getnet->fetchall_arrayref({});
     return $r->[0];
 }
+
+sub get_permissions
+{
+    my $network = shift;
+    my $acc = shift;
+    
+    $sth_perms->execute($network, $acc);
+    my $perms = $sth_perms->fetchall_arrayref({});
+    foreach my $permission (@{$perms}) {
+        $sth_keys->execute($network, $acc, $permission->{'perm'});
+        $permission->{'auth'}{'keys'} = $sth_keys->fetchall_arrayref({});
+        
+        $sth_authacc->execute($network, $acc, $permission->{'perm'});
+        $permission->{'auth'}{'accounts'} = $sth_authacc->fetchall_arrayref({});
+    }
+    return $perms;
+}
+
+
+sub get_authorized_accounts
+{
+    my $network = shift;
+    my $acc = shift;
+    my $permission = shift;
+    my $accounts = shift;
+
+    $sth_acc_by_actor->execute($network, $acc, $permission);
+    my $res = $sth_acc_by_actor->fetchall_arrayref({});
+
+    foreach my $r (@{$res})
+    {
+        my $depacc = $r->{'account_name'};
+        my $depperm = $r->{'perm'};
+        if( not $accounts->{$network}{$depacc}{$depperm} )
+        {
+            $accounts->{$network}{$depacc}{$depperm} = 1;
+            get_authorized_accounts($network, $depacc, $depperm, $accounts);
+        }
+    }
+}
+        
+    
 
 my $json = JSON->new();
 my $jsonp = JSON->new()->pretty->canonical;
@@ -79,9 +146,7 @@ $builder->mount
          my $req = Plack::Request->new($env);
 
          check_dbserver();
-         my $result = $dbh->selectall_arrayref
-             ('SELECT network, chainid, description, systoken, decimals ' .
-              'FROM LIGHTAPI_NETWORKS', {Slice => {}});
+         my $result = get_allnetworks();
          $dbh->commit();
 
          my $res = $req->new_response(200);
@@ -116,8 +181,6 @@ $builder->mount
              return $res->finalize;
          }
 
-         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
-
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
 
          $sth_res->execute($network, $acc);
@@ -126,27 +189,77 @@ $builder->mount
          $sth_bal->execute($network, $acc);
          $result->{'balances'} = $sth_bal->fetchall_arrayref({});
 
-         $sth_perms->execute($network, $acc);
-         my $perms = $sth_perms->fetchall_arrayref({});
-         foreach my $permission (@{$perms}) {
-             $sth_keys->execute($network, $acc, $permission->{'perm'});
-             $permission->{'auth'}{'keys'} = $sth_keys->fetchall_arrayref({});
-
-             $sth_authacc->execute($network, $acc, $permission->{'perm'});
-             $permission->{'auth'}{'accounts'} = $sth_authacc->fetchall_arrayref({});
-         }
-
-         $result->{'permissions'} = $perms;
+         $result->{'permissions'} = get_permissions($network, $acc);
 
          $dbh->commit();
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
-
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
          $res->body($j->encode($result));
          $res->finalize;
      });
 
+$builder->mount
+    ('/api/key' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected an EOS key');
+             return $res->finalize;
+         }
+
+         my $key = $1;
+         check_dbserver();
+
+         $sth_searchkey->execute($key);
+         my $searchres = $sth_searchkey->fetchall_arrayref({});
+         my $result = {};
+
+         my $accounts = {};
+         
+         foreach my $r (@{$searchres})
+         {
+             my $network = $r->{'network'};
+             if( not defined($result->{$network}) )
+             {
+                 $result->{$network}{'chain'} = get_network($network);
+             }
+
+             $accounts->{$network}{$r->{'account_name'}}{$r->{'perm'}} = 1;
+         }
+
+         foreach my $network (keys %{$accounts})
+         {
+             foreach my $acc (keys %{$accounts->{$network}})
+             {
+                 foreach my $perm (keys %{$accounts->{$network}{$acc}})
+                 {
+                     get_authorized_accounts($network, $acc, $perm, $accounts);
+                 }
+             }
+         }
+         
+         foreach my $network (keys %{$accounts})
+         {
+             foreach my $acc (keys %{$accounts->{$network}})
+             {
+                 $result->{$network}{'accounts'}{$acc} = get_permissions($network, $acc);
+             }
+         }
+         
+         $dbh->commit();
+
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
 
 $builder->to_app;
 
