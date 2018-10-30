@@ -1,29 +1,51 @@
 # EOS ZMQ Light API
 
+The API is providing two fundamental functions for EOS blockchain:
+
+* Retrieve all token balances and resources for an account:
+ `http://apihost.domain/api/account/eos/ACCOUNT`
+
+* Retrieve all accounts in all known EOS networks dependent on a public key:
+ `http://apihost.domain/api/key/KEY'
+
+* In addition, adding `?pretty=1` to the URL, you get the resulting JSON
+  sorted and formatted for human viewing.
+
+* Also a request `http://apihost.domain/api/networks' will list all
+  known networks and their information.
 
 
 ## Installation
 
 ```
-sudo apt-get install cpanminus gcc g++ libzmq5-dev mariadb-server \
-libmysqlclient-dev libdbi-perl \
-libjson-xs-perl libjson-perl
+sudo apt-get install git make cpanminus gcc g++ libzmq5-dev mariadb-server \
+libmysqlclient-dev libdbi-perl libjson-xs-perl libjson-perl
 
 sudo cpanm DBD::MariaDB
 sudo cpanm ZMQ::Raw
-
-sudo mysql <sql/lightapi_dbcreate.sql
-
 sudo cpanm Starman
 
-perl /opt/eos_zmq_token_api/scripts/lightapi_dbwrite.pl --sub=tcp://10.0.0.1:6003
+cd /opt
+git clone https://github.com/cc32d9/eos_zmq_light_api.git
+cd eos_zmq_light_api
 
-starman master --listen 127.0.0.1:5001 --workers 6 /opt/eos_zmq_token_api/api/token_api.psgi
+sudo mysql <sql/lightapi_dbcreate.sql
+sh setup/add_eos_mainnet.sh
+
+vi /etc/default/lightapi_eos
+# add the ZMQ socket details:
+# DBWRITE_OPTS=--pull=tcp://127.0.0.1:5556
+
+# Optionally, edit /etc/default/lightapi_api and adjust variables
+# that are predefined in systemd/lightapi_api.service
+
+cd systemd
+sh install_systemd.sh
+
+# Now Starman is serving HTTP requests and you can build your HTTP service
+# with nginx or exposing Starman directly
 ```
 
-## Public API endpoint
-
-http://tokenapi.eoswatch.info/api/account/b1
 
 
 
