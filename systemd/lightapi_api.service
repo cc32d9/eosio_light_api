@@ -1,0 +1,22 @@
+[Unit]
+Description=lightapi API
+
+[Service]
+Type=simple
+Environment="LIGHTAPI_HOME=/opt/eos_zmq_light_api"
+Environment="LISTEN=0.0.0.0:5001"
+Environment="WORKERS=6"
+EnvironmentFile=-/etc/default/lightapi_api
+ExecStart=/usr/local/bin/starman --listen ${LISTEN} --workers ${WORKERS} ${LIGHTAPI_HOME}/api/lightapi.psgi
+TimeoutSec=45s
+Restart=always
+User=root
+Group=daemon
+KillMode=control-group
+
+
+
+[Install]
+WantedBy=multi-user.target
+
+

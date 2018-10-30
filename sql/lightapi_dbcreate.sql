@@ -6,6 +6,15 @@ grant SELECT on lightapi.* to 'lightapiro'@'%' identified by 'lightapiro';
 
 use lightapi;
 
+CREATE TABLE LIGHTAPI_NETWORKS
+(
+ network           VARCHAR(15) PRIMARY KEY,
+ chainid           VARCHAR(64) NOT NULL,
+ description       VARCHAR(256) NOT NULL,
+ systoken          VARCHAR(7) NOT NULL,
+ decimals          SMALLINT NOT NULL
+) ENGINE=InnoDB;
+
 
 CREATE TABLE LIGHTAPI_LATEST_RESOURCE
 (
@@ -14,8 +23,8 @@ CREATE TABLE LIGHTAPI_LATEST_RESOURCE
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
  trx_id            VARCHAR(64) NOT NULL,
- cpu_weight        DOUBLE PRECISION NOT NULL,
- net_weight        DOUBLE PRECISION NOT NULL,
+ cpu_weight        BIGINT NOT NULL,
+ net_weight        BIGINT NOT NULL,
  ram_quota         INTEGER NOT NULL,
  ram_usage         INTEGER NOT NULL
 ) ENGINE=InnoDB;
@@ -30,7 +39,7 @@ CREATE TABLE LIGHTAPI_LATEST_CURRENCY
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
  trx_id            VARCHAR(64) NOT NULL,
- contract            VARCHAR(13) NOT NULL,
+ contract          VARCHAR(13) NOT NULL,
  currency          VARCHAR(8) NOT NULL,
  amount            DOUBLE PRECISION NOT NULL
 ) ENGINE=InnoDB;
@@ -66,6 +75,7 @@ CREATE TABLE LIGHTAPI_AUTH_KEYS
 
 CREATE UNIQUE INDEX LIGHTAPI_AUTH_KEYS_I01 ON LIGHTAPI_AUTH_KEYS (network, account_name, perm, pubkey);
 CREATE INDEX LIGHTAPI_AUTH_KEYS_I02 ON LIGHTAPI_AUTH_KEYS (network, pubkey);
+CREATE INDEX LIGHTAPI_AUTH_KEYS_I03 ON LIGHTAPI_AUTH_KEYS (pubkey);
 
 
 CREATE TABLE LIGHTAPI_AUTH_ACC

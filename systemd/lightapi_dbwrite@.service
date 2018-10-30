@@ -1,0 +1,27 @@
+# This unit's instance name is the EOS network name
+# The instance requires an environment file /etc/default/lightapi_%i
+# The mandatory variable DBWRITE_OPTS should include at least
+# the ZMQ socket to read from, and optionally MySQL database
+# connection details.
+
+
+[Unit]
+Description=lightapi DB Writer
+
+[Service]
+Type=simple
+Environment="LIGHTAPI_HOME=/opt/eos_zmq_light_api"
+EnvironmentFile=/etc/default/lightapi_%i
+
+ExecStart=/usr/bin/perl ${LIGHTAPI_HOME}/scripts/lightapi_dbwrite.pl --network=%i ${DBWRITE_OPTS}
+TimeoutSec=45s
+Restart=always
+User=root
+Group=daemon
+KillMode=control-group
+
+
+[Install]
+WantedBy=multi-user.target
+
+

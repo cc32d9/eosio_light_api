@@ -31,7 +31,7 @@ if( not $ok or scalar(@ARGV) > 0 or not $network or
 {
     print STDERR "Usage: $0 --network=eos [options...]\n",
     "The utility connects to EOS ZMQ PUB or PUSH socket and \n",
-    "updates token balances in the database\n",
+    "updates the database\n",
     "Options:\n",
     "  --network=NAME     name of EOS network\n",
     "  --pull=ENDPOINT    connect to a PUSH socket\n",
@@ -167,8 +167,8 @@ while(1)
                 next;
             }
             
-            my $cpuw = $bal->{'cpu_weight'}/10000.0;            
-            my $netw = $bal->{'net_weight'}/10000.0;
+            my $cpuw = $bal->{'cpu_weight'};
+            my $netw = $bal->{'net_weight'};
             my $quota = $bal->{'ram_quota'};
             my $usage = $bal->{'ram_usage'};
                         
