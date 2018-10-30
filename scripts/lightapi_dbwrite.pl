@@ -7,6 +7,7 @@ use DBI;
 
 $| = 1;
 
+my $network;
 my $ep_pull;
 my $ep_sub;
 
@@ -16,23 +17,25 @@ my $db_password = 'ce1Shish';
 
 
 my $ok = GetOptions
-    ('pull=s'    => \$ep_pull,
+    ('network=s' => \$network,
+     'pull=s'    => \$ep_pull,
      'sub=s'     => \$ep_sub,
      'dsn=s'     => \$dsn,
      'dbuser=s'  => \$db_user,
      'dbpw=s'    => \$db_password);
 
 
-if( not $ok or scalar(@ARGV) > 0 or
+if( not $ok or scalar(@ARGV) > 0 or not $network or
     (not $ep_pull and not $ep_sub) or
     ($ep_pull and $ep_sub) )
 {
-    print STDERR "Usage: $0 [options...]\n",
+    print STDERR "Usage: $0 --network=eos [options...]\n",
     "The utility connects to EOS ZMQ PUB or PUSH socket and \n",
     "updates token balances in the database\n",
     "Options:\n",
-    "  --pull=ENDPOINT  connect to a PUSH socket\n",
-    "  --sub=ENDPOINT   connect to a PUB socket\n",
+    "  --network=NAME     name of EOS network\n",
+    "  --pull=ENDPOINT    connect to a PUSH socket\n",
+    "  --sub=ENDPOINT     connect to a PUB socket\n",
     "  --dsn=DSN          \[$dsn\]\n",
     "  --dbuser=USER      \[$db_user\]\n",
     "  --dbpw=PASSWORD    \[$db_password\]\n";
@@ -48,57 +51,57 @@ die($DBI::errstr) unless $dbh;
 
 my $sth_check_res_block = $dbh->prepare
     ('SELECT block_num FROM LIGHTAPI_LATEST_RESOURCE ' .
-     'WHERE account_name=?');
+     'WHERE network=? AND account_name=?');
 
 my $sth_ins_last_res = $dbh->prepare
     ('INSERT INTO LIGHTAPI_LATEST_RESOURCE ' . 
-     '(account_name, block_num, block_time, trx_id, ' .
+     '(network, account_name, block_num, block_time, trx_id, ' .
      'cpu_weight, net_weight, ram_quota, ram_usage) ' .
-     'VALUES(?,?,?,?,?,?,?,?) ' .
+     'VALUES(?,?,?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, ' .
      'cpu_weight=?, net_weight=?, ram_quota=?, ram_usage=?');
 
 
 my $sth_check_curr_block = $dbh->prepare
     ('SELECT block_num FROM LIGHTAPI_LATEST_CURRENCY ' .
-     'WHERE account_name=? AND contract=? AND currency=?');
+     'WHERE network=? AND account_name=? AND contract=? AND currency=?');
 
 
 my $sth_ins_last_curr = $dbh->prepare
     ('INSERT INTO LIGHTAPI_LATEST_CURRENCY ' . 
-     '(account_name, block_num, block_time, trx_id, contract, currency, amount) ' .
-     'VALUES(?,?,?,?,?,?,?) ' .
+     '(network, account_name, block_num, block_time, trx_id, contract, currency, amount) ' .
+     'VALUES(?,?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?');
 
 
 my $sth_check_auth_block = $dbh->prepare
     ('SELECT block_num FROM LIGHTAPI_AUTH_THRESHOLDS ' .
-     'WHERE account_name=? AND perm=?');
+     'WHERE network=? AND account_name=? AND perm=?');
 
 my $sth_ins_auth_thres = $dbh->prepare
     ('INSERT INTO LIGHTAPI_AUTH_THRESHOLDS ' . 
-     '(account_name, perm, threshold, block_num, block_time, trx_id) ' .
-     'VALUES(?,?,?,?,?,?) ' .
+     '(network, account_name, perm, threshold, block_num, block_time, trx_id) ' .
+     'VALUES(?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE threshold=?, block_num=?, block_time=?, trx_id=?');
 
 my $sth_del_auth_thres = $dbh->prepare
-    ('DELETE FROM LIGHTAPI_AUTH_THRESHOLDS WHERE account_name=? AND perm=?');
+    ('DELETE FROM LIGHTAPI_AUTH_THRESHOLDS WHERE network=? AND account_name=? AND perm=?');
 
 my $sth_del_auth_keys = $dbh->prepare
-    ('DELETE FROM LIGHTAPI_AUTH_KEYS WHERE account_name=? AND perm=?');
+    ('DELETE FROM LIGHTAPI_AUTH_KEYS WHERE network=? AND account_name=? AND perm=?');
 
 my $sth_del_auth_acc = $dbh->prepare
-    ('DELETE FROM LIGHTAPI_AUTH_ACC WHERE account_name=? AND perm=?');
+    ('DELETE FROM LIGHTAPI_AUTH_ACC WHERE network=? AND account_name=? AND perm=?');
 
 my $sth_ins_auth_key = $dbh->prepare
     ('INSERT INTO LIGHTAPI_AUTH_KEYS ' . 
-     '(account_name, perm, pubkey, weight) ' .
-     'VALUES(?,?,?,?)');
+     '(network, account_name, perm, pubkey, weight) ' .
+     'VALUES(?,?,?,?,?)');
 
 my $sth_ins_auth_acc = $dbh->prepare
     ('INSERT INTO LIGHTAPI_AUTH_ACC ' . 
-     '(account_name, perm, actor, permission, weight) ' .
-     'VALUES(?,?,?,?,?)');
+     '(network, account_name, perm, actor, permission, weight) ' .
+     'VALUES(?,?,?,?,?,?)');
 
 
 
@@ -157,7 +160,7 @@ while(1)
         {
             my $account = $bal->{'account_name'};
             
-            $sth_check_res_block->execute($account);
+            $sth_check_res_block->execute($network, $account);
             my $r = $sth_check_res_block->fetchall_arrayref();
             if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
             {
@@ -170,7 +173,7 @@ while(1)
             my $usage = $bal->{'ram_usage'};
                         
             $sth_ins_last_res->execute
-                ($account, $block_num, $block_time, $tx,
+                ($network, $account, $block_num, $block_time, $tx,
                  $cpuw, $netw, $quota, $usage,
                  $block_num, $block_time, $tx,
                  $cpuw, $netw, $quota, $usage);
@@ -182,7 +185,7 @@ while(1)
             my $contract = $bal->{'contract'};
             my ($amount, $currency) = split(/\s+/, $bal->{'balance'});
 
-            $sth_check_curr_block->execute($account, $contract, $currency);
+            $sth_check_curr_block->execute($network, $account, $contract, $currency);
             my $r = $sth_check_curr_block->fetchall_arrayref();
             if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
             {
@@ -190,7 +193,7 @@ while(1)
             }
             
             $sth_ins_last_curr->execute
-                ($account, $block_num, $block_time, $tx,
+                ($network, $account, $block_num, $block_time, $tx,
                  $contract, $currency, $amount,
                  $block_num, $block_time, $tx, $amount);
         }
@@ -204,16 +207,16 @@ while(1)
             my $account = $authdata->{'account'};
             my $perm = $authdata->{'perm'};
             
-            $sth_check_auth_block->execute($account, $perm);
+            $sth_check_auth_block->execute($network, $account, $perm);
             my $r = $sth_check_auth_block->fetchall_arrayref();
             if( scalar(@{$r}) == 0 or $r->[0][0] >= $block_num )
             {
                 next;
             }
             
-            $sth_del_auth_thres->execute($account, $perm);
-            $sth_del_auth_keys->execute($account, $perm);
-            $sth_del_auth_acc->execute($account, $perm);
+            $sth_del_auth_thres->execute($network, $account, $perm);
+            $sth_del_auth_keys->execute($network, $account, $perm);
+            $sth_del_auth_acc->execute($network, $account, $perm);
         }
         
         foreach my $authdata (@{$state->{'addauth'}})
@@ -221,7 +224,7 @@ while(1)
             my $account = $authdata->{'account'};
             my $perm = $authdata->{'perm'};
             
-            $sth_check_auth_block->execute($account, $perm);
+            $sth_check_auth_block->execute($network, $account, $perm);
             my $r = $sth_check_auth_block->fetchall_arrayref();
             if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
             {
@@ -232,23 +235,23 @@ while(1)
             my $threshold = $auth->{'threshold'};
 
             $sth_ins_auth_thres->execute
-                ($account, $perm, $threshold, 
+                ($network, $account, $perm, $threshold, 
                  $block_num, $block_time, $tx,
                  $threshold, $block_num, $block_time, $tx);
 
-            $sth_del_auth_keys->execute($account, $perm);
-            $sth_del_auth_acc->execute($account, $perm);
+            $sth_del_auth_keys->execute($network, $account, $perm);
+            $sth_del_auth_acc->execute($network, $account, $perm);
 
             foreach my $keydata (@{$auth->{'keys'}})
             {
                 $sth_ins_auth_key->execute
-                    ($account, $perm, $keydata->{'key'}, $keydata->{'weight'});
+                    ($network, $account, $perm, $keydata->{'key'}, $keydata->{'weight'});
             }
             
             foreach my $accdata (@{$auth->{'accounts'}})
             {
                 $sth_ins_auth_acc->execute
-                    ($account, $perm, $accdata->{'permission'}{'actor'},
+                    ($network, $account, $perm, $accdata->{'permission'}{'actor'},
                      $accdata->{'permission'}{'permission'},
                      $accdata->{'weight'});
             }            
