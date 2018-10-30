@@ -6,12 +6,12 @@ The API is providing two fundamental functions for EOS blockchain:
  `http://apihost.domain/api/account/eos/ACCOUNT`
 
 * Retrieve all accounts in all known EOS networks dependent on a public key:
- `http://apihost.domain/api/key/KEY'
+ `http://apihost.domain/api/key/KEY`
 
 * In addition, adding `?pretty=1` to the URL, you get the resulting JSON
   sorted and formatted for human viewing.
 
-* Also a request `http://apihost.domain/api/networks' will list all
+* Also a request `http://apihost.domain/api/networks` will list all
   known networks and their information.
 
 
