@@ -7,7 +7,7 @@ for n in $NETWORKS; do
     fi
 done
 
-cp *.service /etc/systemd/system/
+cp lightapi_dbwrite\@.service /etc/systemd/system/
 
 systemctl daemon-reload
 
@@ -17,8 +17,4 @@ for n in $NETWORKS; do
 done
 
 
-for f in lightapi_api.service; do
-    systemctl enable $f
-    systemctl start $f
-done
 

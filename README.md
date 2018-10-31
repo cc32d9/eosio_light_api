@@ -40,7 +40,8 @@ vi /etc/default/lightapi_eos
 # that are predefined in systemd/lightapi_api.service
 
 cd systemd
-sh install_systemd.sh
+sh install_systemd_dbwrite.sh
+sh install_systemd_api.sh
 
 # Now Starman is serving HTTP requests and you can build your HTTP service
 # with nginx or exposing Starman directly
