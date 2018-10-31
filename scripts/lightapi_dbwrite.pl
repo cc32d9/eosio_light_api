@@ -50,7 +50,7 @@ my $dbh = DBI->connect($dsn, $db_user, $db_password,
 die($DBI::errstr) unless $dbh;
 
 my $sth_check_res_block = $dbh->prepare
-    ('SELECT block_num FROM LIGHTAPI_LATEST_RESOURCE ' .
+    ('SELECT block_num, irreversible FROM LIGHTAPI_LATEST_RESOURCE ' .
      'WHERE network=? AND account_name=?');
 
 my $sth_ins_last_res = $dbh->prepare
@@ -63,7 +63,7 @@ my $sth_ins_last_res = $dbh->prepare
 
 
 my $sth_check_curr_block = $dbh->prepare
-    ('SELECT block_num FROM LIGHTAPI_LATEST_CURRENCY ' .
+    ('SELECT block_num, irreversible FROM LIGHTAPI_LATEST_CURRENCY ' .
      'WHERE network=? AND account_name=? AND contract=? AND currency=?');
 
 
@@ -75,7 +75,7 @@ my $sth_ins_last_curr = $dbh->prepare
 
 
 my $sth_check_auth_block = $dbh->prepare
-    ('SELECT block_num FROM LIGHTAPI_AUTH_THRESHOLDS ' .
+    ('SELECT block_num, irreversible FROM LIGHTAPI_AUTH_THRESHOLDS ' .
      'WHERE network=? AND account_name=? AND perm=?');
 
 my $sth_ins_auth_thres = $dbh->prepare
@@ -103,6 +103,14 @@ my $sth_ins_auth_acc = $dbh->prepare
      '(network, account_name, perm, actor, permission, weight) ' .
      'VALUES(?,?,?,?,?,?)');
 
+my $sth_upd_irrev_res = $dbh->prepare
+    ('UPDATE LIGHTAPI_LATEST_RESOURCE SET irreversible=1 WHERE irreversible=0 AND block_num<=?');
+
+my $sth_upd_irrev_curr = $dbh->prepare
+    ('UPDATE LIGHTAPI_LATEST_CURRENCY SET irreversible=1 WHERE irreversible=0 AND block_num<=?');
+
+my $sth_upd_irrev_auth = $dbh->prepare
+    ('UPDATE LIGHTAPI_AUTH_THRESHOLDS SET irreversible=1 WHERE irreversible=0 AND block_num<=?');
 
 
 my $ctxt = ZMQ::Raw::Context->new;
@@ -121,8 +129,7 @@ else
     $connectstr = $ep_sub;
     $socket = ZMQ::Raw::Socket->new ($ctxt, ZMQ::Raw->ZMQ_SUB );
     $socket->setsockopt(ZMQ::Raw::Socket->ZMQ_RCVBUF, 10240);
-    # subscribe only on action events
-    $socket->setsockopt(ZMQ::Raw::Socket->ZMQ_SUBSCRIBE, pack('VV', 0, 0));
+    $socket->setsockopt(ZMQ::Raw::Socket->ZMQ_SUBSCRIBE, '');
     $socket->connect( $connectstr );
 }    
 
@@ -162,7 +169,7 @@ while(1)
             
             $sth_check_res_block->execute($network, $account);
             my $r = $sth_check_res_block->fetchall_arrayref();
-            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
+            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num and $r->[0][1] )
             {
                 next;
             }
@@ -187,7 +194,7 @@ while(1)
 
             $sth_check_curr_block->execute($network, $account, $contract, $currency);
             my $r = $sth_check_curr_block->fetchall_arrayref();
-            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
+            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num and $r->[0][1] )
             {
                 next;
             }
@@ -209,7 +216,7 @@ while(1)
             
             $sth_check_auth_block->execute($network, $account, $perm);
             my $r = $sth_check_auth_block->fetchall_arrayref();
-            if( scalar(@{$r}) == 0 or $r->[0][0] >= $block_num )
+            if( scalar(@{$r}) == 0 or ($r->[0][0] >= $block_num and $r->[0][1]) )
             {
                 next;
             }
@@ -226,7 +233,7 @@ while(1)
             
             $sth_check_auth_block->execute($network, $account, $perm);
             my $r = $sth_check_auth_block->fetchall_arrayref();
-            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num )
+            if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num and $r->[0][1] )
             {
                 next;
             }
@@ -256,6 +263,15 @@ while(1)
                      $accdata->{'weight'});
             }            
         }
+    }
+    elsif( $msgtype == 1 )  # irreversible block
+    {
+        my $data = $json->decode($js);
+        my $block_num = $data->{'irreversible_block_num'};
+
+        $sth_upd_irrev_res->execute($block_num);
+        $sth_upd_irrev_curr->execute($block_num);
+        $sth_upd_irrev_auth->execute($block_num);
     }
 
     $dbh->commit();
