@@ -63,14 +63,14 @@ my $sth_ins_last_res = $dbh->prepare
 
 
 my $sth_check_curr_block = $dbh->prepare
-    ('SELECT block_num, irreversible FROM LIGHTAPI_LATEST_CURRENCY ' .
+    ('SELECT block_num, irreversible, decimals FROM LIGHTAPI_LATEST_CURRENCY ' .
      'WHERE network=? AND account_name=? AND contract=? AND currency=?');
 
 
 my $sth_ins_last_curr = $dbh->prepare
     ('INSERT INTO LIGHTAPI_LATEST_CURRENCY ' . 
-     '(network, account_name, block_num, block_time, trx_id, contract, currency, amount) ' .
-     'VALUES(?,?,?,?,?,?,?,?) ' .
+     '(network, account_name, block_num, block_time, trx_id, contract, currency, amount, decimals) ' .
+     'VALUES(?,?,?,?,?,?,?,?,?) ' .
      'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?');
 
 
@@ -198,10 +198,28 @@ while(1)
             {
                 next;
             }
+
+            my $decimals;
+            if( scalar(@{$r}) > 0 )
+            {
+                $decimals = $r->[0][2];
+            }
+            else
+            {
+                my $pos = index($amount, '.');
+                if( $pos == -1 )
+                {
+                    $decimals = 0;
+                }
+                else
+                {
+                    $decimals = length($amount) - $pos - 1;
+                }
+            }
             
             $sth_ins_last_curr->execute
                 ($network, $account, $block_num, $block_time, $tx,
-                 $contract, $currency, $amount,
+                 $contract, $currency, $amount, $decimals,
                  $block_num, $block_time, $tx, $amount);
         }
 

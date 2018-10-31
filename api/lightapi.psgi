@@ -46,7 +46,7 @@ sub check_dbserver
              'WHERE network=? AND account_name=?');
 
         $sth_bal = $dbh->prepare
-            ('SELECT block_num, block_time, trx_id, contract, currency, amount ' .
+            ('SELECT block_num, block_time, trx_id, contract, currency, FORMAT(amount,decimals) AS amount ' .
              'FROM LIGHTAPI_LATEST_CURRENCY ' .
              'WHERE network=? AND account_name=?');
 

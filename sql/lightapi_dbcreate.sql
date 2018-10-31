@@ -43,6 +43,7 @@ CREATE TABLE LIGHTAPI_LATEST_CURRENCY
  contract          VARCHAR(13) NOT NULL,
  currency          VARCHAR(8) NOT NULL,
  amount            DOUBLE PRECISION NOT NULL,
+ decimals          TINYINT NOT NULL,
  irreversible      TINYINT NOT NULL DEFAULT 0 
 ) ENGINE=InnoDB;
 
