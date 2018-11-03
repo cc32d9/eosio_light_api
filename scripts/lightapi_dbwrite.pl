@@ -178,7 +178,8 @@ while(1)
                         next;
                     }
                     
-                    $db->{'sth_del_auth_thres'}->execute($network, $account, $perm);
+                    $db->{'sth_del_auth_thres'}->execute
+                        ($block_num, $block_time, $tx, $network, $account, $perm);
                     $db->{'sth_del_auth_keys'}->execute($network, $account, $perm);
                     $db->{'sth_del_auth_acc'}->execute($network, $account, $perm);
                 }
@@ -344,7 +345,7 @@ sub getdb
          'cpu_weight, net_weight, ram_quota, ram_usage) ' .
          'VALUES(?,?,?,?,?,?,?,?,?) ' .
          'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, ' .
-         'cpu_weight=?, net_weight=?, ram_quota=?, ram_usage=?');
+         'cpu_weight=?, net_weight=?, ram_quota=?, ram_usage=?, irreversible=0');
 
 
     $db->{'sth_check_curr_block'} = $dbh->prepare
@@ -356,7 +357,7 @@ sub getdb
         ('INSERT INTO LIGHTAPI_LATEST_CURRENCY ' . 
          '(network, account_name, block_num, block_time, trx_id, contract, currency, amount, decimals) ' .
          'VALUES(?,?,?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?');
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?, irreversible=0');
 
 
     $db->{'sth_check_auth_block'} = $dbh->prepare
@@ -367,10 +368,13 @@ sub getdb
         ('INSERT INTO LIGHTAPI_AUTH_THRESHOLDS ' . 
          '(network, account_name, perm, threshold, block_num, block_time, trx_id) ' .
          'VALUES(?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE threshold=?, block_num=?, block_time=?, trx_id=?');
+         'ON DUPLICATE KEY UPDATE threshold=?, block_num=?, block_time=?, trx_id=?, ' .
+         'deleted=0, irreversible=0');
 
     $db->{'sth_del_auth_thres'} = $dbh->prepare
-        ('DELETE FROM LIGHTAPI_AUTH_THRESHOLDS WHERE network=? AND account_name=? AND perm=?');
+        ('UPDATE LIGHTAPI_AUTH_THRESHOLDS SET ' .
+         'deleted=1, threshold=0, block_num=?, block_time=?, trx_id=?, irreversible=0 ' .
+         'WHERE network=? AND account_name=? AND perm=?');
 
     $db->{'sth_del_auth_keys'} = $dbh->prepare
         ('DELETE FROM LIGHTAPI_AUTH_KEYS WHERE network=? AND account_name=? AND perm=?');
