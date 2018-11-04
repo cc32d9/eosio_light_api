@@ -5,6 +5,7 @@ use DBI;
 
 $| = 1;
 
+my $hostr;
 my $dsnr;
 my $dbr_user = 'lightapiro';
 my $dbr_password = 'lightapiro';
@@ -14,7 +15,8 @@ my $dbw_user = 'lightapi';
 my $dbw_password = 'ce1Shish';
 
 my $ok = GetOptions
-    ('dsnr=s'     => \$dsnr,
+    ('hostr=s'    => \$hostr,
+     'dsnr=s'     => \$dsnr,
      'dbruser=s'  => \$dbr_user,
      'dbrpw=s'    => \$dbr_password,
      'dsnw=s'     => \$dsnw,
@@ -22,12 +24,13 @@ my $ok = GetOptions
      'dbwpw=s'    => \$dbw_password);
 
 
-if( not $ok or scalar(@ARGV) > 0 or not $dsnr )
+if( not $ok or scalar(@ARGV) > 0 or not ($dsnr or $hostr))
 {
-    print STDERR "Usage: $0 --dsnr='DBI:MariaDB:database=lightapi;host=HOST' [options...]\n",
+    print STDERR "Usage: $0 --dsnr=DSN|--host=HOST [options...]\n",
     "The utility reads merges missing entries from another instance of Light API database.\n",
     "Options:\n",
-    "  --dsnr=DSN          Source database DSN\n",
+    "  --hostr=HOST        Source database host\n",
+    "  --dsnr=DSN          Source DSN (DBI:MariaDB:database=lightapi;host=HOST)\n",
     "  --dbruser=USER      \[$dbr_user\]\n",
     "  --dbrpw=PASSWORD    \[$dbr_password\]\n",
     "  --dsnw=DSN          \[$dsnw\]\n",
@@ -36,7 +39,11 @@ if( not $ok or scalar(@ARGV) > 0 or not $dsnr )
     exit 1;
 }
 
-
+if( not defined($dsnr) )
+{
+    $dsnr = 'DBI:MariaDB:database=lightapi;host=' . $hostr;
+}
+        
 my $dbhr = DBI->connect($dsnr, $dbr_user, $dbr_password,
                         {'RaiseError' => 1, AutoCommit => 0,
                          mariadb_server_prepare => 1});
@@ -53,10 +60,12 @@ my @networks;
 {
     my $r = $dbhw->selectall_arrayref('SELECT network FROM LIGHTAPI_NETWORKS');
     @networks = map {$_->[0]} @{$r};
+    die('No networks defined in LIGHTAPI_NETWORKS') if scalar(@networks) == 0;
 }
 
 my $where_network = ' WHERE network IN (' . join(',', map {'\'' . $_ . '\''} @networks) . ') ';
 
+printf("Using source database: %s\n", $dsnr);
 printf("Merging for networks: %s\n", join(', ', @networks));
 
 printf("Processing LIGHTAPI_LATEST_RESOURCE\n");
