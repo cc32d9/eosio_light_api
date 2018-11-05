@@ -44,7 +44,8 @@ CREATE TABLE LIGHTAPI_LATEST_CURRENCY
  currency          VARCHAR(8) NOT NULL,
  amount            DOUBLE PRECISION NOT NULL,
  decimals          TINYINT NOT NULL,
- irreversible      TINYINT NOT NULL DEFAULT 0 
+ irreversible      TINYINT NOT NULL DEFAULT 0,
+ deleted           TINYINT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB;
 
 CREATE UNIQUE INDEX LIGHTAPI_LATEST_CURRENCY_I01 ON LIGHTAPI_LATEST_CURRENCY (network, account_name, contract, currency);

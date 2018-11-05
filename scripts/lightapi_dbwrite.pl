@@ -130,7 +130,8 @@ while(1)
                     my $account = $bal->{'account_name'};
                     my $contract = $bal->{'contract'};
                     my ($amount, $currency) = split(/\s+/, $bal->{'balance'});
-
+                    my $deleted = $bal->{'deleted'}?1:0;
+                        
                     $db->{'sth_check_curr_block'}->execute($network, $account, $contract, $currency);
                     my $r = $db->{'sth_check_curr_block'}->fetchall_arrayref();
                     if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num and $r->[0][1] )
@@ -158,8 +159,8 @@ while(1)
                     
                     $db->{'sth_ins_last_curr'}->execute
                         ($network, $account, $block_num, $block_time, $tx,
-                         $contract, $currency, $amount, $decimals,
-                         $block_num, $block_time, $tx, $amount);
+                         $contract, $currency, $amount, $decimals, $deleted,
+                         $block_num, $block_time, $tx, $amount, $deleted);
                 }
 
                 my $atrace = $action->{'action_trace'};
@@ -355,9 +356,10 @@ sub getdb
 
     $db->{'sth_ins_last_curr'} = $dbh->prepare
         ('INSERT INTO LIGHTAPI_LATEST_CURRENCY ' . 
-         '(network, account_name, block_num, block_time, trx_id, contract, currency, amount, decimals) ' .
-         'VALUES(?,?,?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?, irreversible=0');
+         '(network, account_name, block_num, block_time, trx_id, ' .
+         'contract, currency, amount, decimals, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?, irreversible=0, deleted=?');
 
 
     $db->{'sth_check_auth_block'} = $dbh->prepare
