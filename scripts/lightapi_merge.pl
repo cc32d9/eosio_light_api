@@ -126,13 +126,13 @@ printf("Processing LIGHTAPI_LATEST_CURRENCY\n");
     my $sthw_ins = $dbhw->prepare
         ('INSERT INTO LIGHTAPI_LATEST_CURRENCY ' . 
          '(network, account_name, block_num, block_time, trx_id, contract, ' .
-         ' currency, amount, decimals, irreversible) ' .
-         'VALUES(?,?,?,?,?,?,?,?,?,1) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?, irreversible=1');
+         ' currency, amount, decimals, irreversible, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?,1,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?, irreversible=1, deleted=?');
 
     my @columns =
-        qw(network account_name block_num block_time trx_id contract currency amount decimals
-           block_num block_time trx_id amount);
+        qw(network account_name block_num block_time trx_id contract currency amount decimals deleted
+           block_num block_time trx_id amount deleted);
     
     my $c_fetched = 0;
     my $c_updated = 0;
