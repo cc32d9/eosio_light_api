@@ -26,7 +26,7 @@ sub check_dbserver
 {
     if ( not defined($dbh) or not $dbh->ping() ) {
         $dbh = DBI->connect($dsn, $db_user, $db_password,
-                            {'RaiseError' => 1, AutoCommit => 0,
+                            {'RaiseError' => 1, AutoCommit => 1,
                              'mariadb_server_prepare' => 1});
         die($DBI::errstr) unless $dbh;
 
@@ -46,7 +46,7 @@ sub check_dbserver
              'WHERE network=? AND account_name=?');
 
         $sth_bal = $dbh->prepare
-            ('SELECT block_num, block_time, trx_id, contract, currency, FORMAT(amount,decimals) AS amount ' .
+            ('SELECT block_num, block_time, trx_id, contract, currency, FORMAT(amount,decimals) AS amount, deleted ' .
              'FROM LIGHTAPI_LATEST_CURRENCY ' .
              'WHERE network=? AND account_name=?');
 
@@ -147,7 +147,6 @@ $builder->mount
 
          check_dbserver();
          my $result = get_allnetworks();
-         $dbh->commit();
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
@@ -190,8 +189,6 @@ $builder->mount
          $result->{'balances'} = $sth_bal->fetchall_arrayref({});
 
          $result->{'permissions'} = get_permissions($network, $acc);
-
-         $dbh->commit();
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
@@ -252,8 +249,6 @@ $builder->mount
              }
          }
          
-         $dbh->commit();
-
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
