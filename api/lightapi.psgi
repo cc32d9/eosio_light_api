@@ -46,7 +46,8 @@ sub check_dbserver
              'WHERE network=? AND account_name=?');
 
         $sth_bal = $dbh->prepare
-            ('SELECT block_num, block_time, trx_id, contract, currency, FORMAT(amount,decimals) AS amount, deleted ' .
+            ('SELECT block_num, block_time, trx_id, contract, currency, ' .
+             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
              'FROM LIGHTAPI_LATEST_CURRENCY ' .
              'WHERE network=? AND account_name=?');
 
@@ -187,7 +188,11 @@ $builder->mount
 
          $sth_bal->execute($network, $acc);
          $result->{'balances'} = $sth_bal->fetchall_arrayref({});
-
+         foreach my $row (@{$result->{'balances'}})
+         {
+             $row->{'amount'} = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
+         }
+         
          $result->{'permissions'} = get_permissions($network, $acc);
 
          my $res = $req->new_response(200);
