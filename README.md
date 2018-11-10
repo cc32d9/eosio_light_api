@@ -11,8 +11,13 @@ The API is providing two fundamental functions for EOS blockchain:
 * In addition, adding `?pretty=1` to the URL, you get the resulting JSON
   sorted and formatted for human viewing.
 
-* Also a request `http://apihost.domain/api/networks` will list all
-  known networks and their information.
+* `http://apihost.domain/api/networks` lists all known networks and
+  their information.
+
+* `http://apihost.domain/api/sync/eos` returns a plain text number of
+  seconds that this server's blockchain database is behind the real
+  time.
+
 
 
 ## Installation

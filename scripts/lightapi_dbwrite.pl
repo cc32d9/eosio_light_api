@@ -223,14 +223,22 @@ while(1)
                     }            
                 }
             }
+            elsif( $msgtype == 3 )  # accepted block
+            {
+                my $data = $json->decode($js);
+                my $block_num = $data->{'accepted_block_num'};
+                my $block_time = $data->{'accepted_block_timestamp'};
+                $block_time =~ s/T/ /;
+                $db->{'sth_upd_sync'}->execute($block_num, $block_time, $network);
+            }
             elsif( $msgtype == 1 )  # irreversible block
             {
                 my $data = $json->decode($js);
                 my $block_num = $data->{'irreversible_block_num'};
 
-                $db->{'sth_upd_irrev_res'}->execute($block_num);
-                $db->{'sth_upd_irrev_curr'}->execute($block_num);
-                $db->{'sth_upd_irrev_auth'}->execute($block_num);
+                $db->{'sth_upd_irrev_res'}->execute($network, $block_num);
+                $db->{'sth_upd_irrev_curr'}->execute($network, $block_num);
+                $db->{'sth_upd_irrev_auth'}->execute($network, $block_num);
             }
 
             $db->{'dbh'}->commit();
@@ -394,12 +402,15 @@ sub getdb
          '(network, account_name, perm, actor, permission, weight) ' .
          'VALUES(?,?,?,?,?,?)');
 
+    $db->{'sth_upd_sync'} = $dbh->prepare
+        ('UPDATE LIGHTAPI_SYNC SET block_num=?, block_time=? WHERE network=?');
+    
     $db->{'sth_upd_irrev_res'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_LATEST_RESOURCE SET irreversible=1 WHERE irreversible=0 AND block_num<=?');
+        ('UPDATE LIGHTAPI_LATEST_RESOURCE SET irreversible=1 WHERE network=? AND irreversible=0 AND block_num<=?');
 
     $db->{'sth_upd_irrev_curr'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_LATEST_CURRENCY SET irreversible=1 WHERE irreversible=0 AND block_num<=?');
+        ('UPDATE LIGHTAPI_LATEST_CURRENCY SET irreversible=1 WHERE network=? AND irreversible=0 AND block_num<=?');
 
     $db->{'sth_upd_irrev_auth'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_AUTH_THRESHOLDS SET irreversible=1 WHERE irreversible=0 AND block_num<=?');
+        ('UPDATE LIGHTAPI_AUTH_THRESHOLDS SET irreversible=1 WHERE network=? AND irreversible=0 AND block_num<=?');
 }

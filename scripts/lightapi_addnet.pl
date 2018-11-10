@@ -55,6 +55,11 @@ my $sth = $dbh->prepare
     ('INSERT INTO LIGHTAPI_NETWORKS (network, chainid, description, systoken, decimals) ' .
      'VALUES (?,?,?,?,?)');
 $sth->execute($network, $chainid, $description, $systoken, $decimals);
+
+$sth = $dbh->prepare
+    ('INSERT INTO LIGHTAPI_SYNC (network, block_num, block_time) ' .
+     'VALUES (?,0, \'2000-01-01 00:00:00\')');
+$sth->execute($network);
 $dbh->commit();
 
 

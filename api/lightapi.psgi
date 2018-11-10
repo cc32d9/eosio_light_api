@@ -21,6 +21,7 @@ my $sth_keys;
 my $sth_authacc;
 my $sth_searchkey;
 my $sth_acc_by_actor;
+my $sth_sync;
 
 sub check_dbserver
 {
@@ -75,6 +76,10 @@ sub check_dbserver
             ('SELECT account_name, perm ' .
              'FROM LIGHTAPI_AUTH_ACC ' .
              'WHERE network=? AND actor=? AND permission=?');
+
+        $sth_sync = $dbh->prepare
+            ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
+             'FROM LIGHTAPI_SYNC WHERE network=?');
     }
 }
 
@@ -260,6 +265,39 @@ $builder->mount
          $res->body($j->encode($result));
          $res->finalize;
      });
+
+$builder->mount
+    ('/api/sync' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         check_dbserver();
+
+         $sth_sync->execute($network);
+         my $r = $sth_sync->fetchall_arrayref();
+
+         if ( scalar(@{$r}) == 0 ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Unknown network name: ' . $network);
+             return $res->finalize;
+         }
+
+         my $res = $req->new_response(200);
+         $res->content_type('text/plain');
+         $res->body($r->[0][0]);
+         $res->finalize;
+     });
+
 
 $builder->to_app;
 
