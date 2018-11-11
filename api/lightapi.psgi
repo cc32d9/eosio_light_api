@@ -292,9 +292,11 @@ $builder->mount
              return $res->finalize;
          }
 
+         my $delay = $r->[0][0];
+         my $status = ($delay <= 180) ? 'OK':'OUT_OF_SYNC';
          my $res = $req->new_response(200);
          $res->content_type('text/plain');
-         $res->body($r->[0][0]);
+         $res->body(join(' ', $delay, $status));
          $res->finalize;
      });
 

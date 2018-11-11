@@ -14,9 +14,10 @@ The API is providing two fundamental functions for EOS blockchain:
 * `http://apihost.domain/api/networks` lists all known networks and
   their information.
 
-* `http://apihost.domain/api/sync/eos` returns a plain text number of
+* `http://apihost.domain/api/sync/eos` returns a plain text delay in
   seconds that this server's blockchain database is behind the real
-  time.
+  time, and a status: OK if the delay is within 180 seconds, or
+  'OUT_OF_SYNC' otherwise.
 
 
 
