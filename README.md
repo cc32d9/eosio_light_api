@@ -1,5 +1,7 @@
 # EOS ZMQ Light API
 
+## API description
+
 The API is providing two fundamental functions for EOS blockchain:
 
 * Retrieve all token balances and resources for an account:
@@ -18,6 +20,24 @@ The API is providing two fundamental functions for EOS blockchain:
   seconds that this server's blockchain database is behind the real
   time, and a status: OK if the delay is within 180 seconds, or
   'OUT_OF_SYNC' otherwise.
+
+
+
+## Public endpoints
+
+A list of public API endpoints is served by IPFS, and available with the
+following links:
+
+* https://endpoints.light.xeos.me/endpoints.json  (served by Cloudflare)
+
+* https://ipfs.io/ipns/QmTuBHRokSuiLBiqE1HySfK1BFiT2pmuDTuJKXNganE52N/endpoints.json
+
+
+## Project sponsors
+
+* GetScatter (https://get-scatter.com/): engineering, hosting and maintenance
+
+* EOS Cafe Block (https://www.eoscafeblock.com/): hosting
 
 
 
