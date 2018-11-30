@@ -12,7 +12,8 @@ CREATE TABLE LIGHTAPI_NETWORKS
  chainid           VARCHAR(64) NOT NULL,
  description       VARCHAR(256) NOT NULL,
  systoken          VARCHAR(7) NOT NULL,
- decimals          TINYINT NOT NULL
+ decimals          TINYINT NOT NULL,
+ production        TINYINT NOT NULL DEFAULT 1
 ) ENGINE=InnoDB;
 
 

@@ -10,6 +10,7 @@ my $chainid;
 my $description;
 my $systoken;
 my $decimals;
+my $testnet;
 
 my $dsn = 'DBI:MariaDB:database=lightapi;host=localhost';
 my $db_user = 'lightapi';
@@ -22,6 +23,7 @@ my $ok = GetOptions
      'descr=s'   => \$description,
      'token=s'   => \$systoken,
      'dec=i'     => \$decimals,
+     'testnet'   => \$testnet,
      'dsn=s'     => \$dsn,
      'dbuser=s'  => \$db_user,
      'dbpw=s'    => \$db_password);
@@ -38,6 +40,7 @@ if( not $ok or scalar(@ARGV) > 0 or not
     "  --descr=DESCR      network description\n",
     "  --token=T          system token name\n",
     "  --dec=4            system token decimals\n",
+    "  --testnet          non-production network\n",
     "  --dsn=DSN          \[$dsn\]\n",
     "  --dbuser=USER      \[$db_user\]\n",
     "  --dbpw=PASSWORD    \[$db_password\]\n";
@@ -52,12 +55,12 @@ my $dbh = DBI->connect($dsn, $db_user, $db_password,
 die($DBI::errstr) unless $dbh;
 
 my $sth = $dbh->prepare
-    ('INSERT INTO LIGHTAPI_NETWORKS (network, chainid, description, systoken, decimals) ' .
-     'VALUES (?,?,?,?,?)');
-$sth->execute($network, $chainid, $description, $systoken, $decimals);
+    ('INSERT INTO LIGHTAPI_NETWORKS (network, chainid, description, systoken, decimals, production) ' .
+     'VALUES (?,?,?,?,?,?)');
+$sth->execute($network, $chainid, $description, $systoken, $decimals, ($testnet?0:1));
 
 $sth = $dbh->prepare
-    ('INSERT INTO LIGHTAPI_SYNC (network, block_num, block_time) ' .
+    ('INSERT IGNORE INTO LIGHTAPI_SYNC (network, block_num, block_time) ' .
      'VALUES (?,0, \'2000-01-01 00:00:00\')');
 $sth->execute($network);
 $dbh->commit();

@@ -32,11 +32,11 @@ sub check_dbserver
         die($DBI::errstr) unless $dbh;
 
         $sth_allnetworks = $dbh->prepare
-            ('SELECT network, chainid, description, systoken, decimals ' .
+            ('SELECT network, chainid, description, systoken, decimals, production ' .
              'FROM LIGHTAPI_NETWORKS');
 
         $sth_getnet = $dbh->prepare
-            ('SELECT network, chainid, description, systoken, decimals ' .
+            ('SELECT network, chainid, description, systoken, decimals, production ' .
              'FROM LIGHTAPI_NETWORKS WHERE network=?');
 
         $sth_res = $dbh->prepare
