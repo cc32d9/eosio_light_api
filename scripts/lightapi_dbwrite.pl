@@ -87,6 +87,7 @@ while(1)
     my $data = $socket->recv();
     my ($msgtype, $opts, $js) = unpack('VVa*', $data);
 
+    my $where = '';
     my $ok = 0;
     while( not $ok )
     {
@@ -101,6 +102,7 @@ while(1)
                 $block_time =~ s/T/ /;
 
                 my $block_num = $action->{'block_num'};
+                $where = 'tx=' . $tx . ';action=' . $action->{'action_trace'}{'act'}{'name'};
                 
                 foreach my $bal (@{$action->{'resource_balances'}})
                 {
@@ -229,13 +231,14 @@ while(1)
                 my $block_num = $data->{'accepted_block_num'};
                 my $block_time = $data->{'accepted_block_timestamp'};
                 $block_time =~ s/T/ /;
+                $where = 'accepted_block=' . $block_num;
                 $db->{'sth_upd_sync'}->execute($block_num, $block_time, $network);
             }
             elsif( $msgtype == 1 )  # irreversible block
             {
                 my $data = $json->decode($js);
                 my $block_num = $data->{'irreversible_block_num'};
-
+                $where = 'irreversible_block=' . $block_num;
                 $db->{'sth_upd_irrev_res'}->execute($network, $block_num);
                 $db->{'sth_upd_irrev_curr'}->execute($network, $block_num);
                 $db->{'sth_upd_irrev_auth'}->execute($network, $block_num);
@@ -246,7 +249,7 @@ while(1)
 
         if( $@ )
         {
-            print STDERR $@, "\n";
+            print STDERR $@, " at $where\n";
             sleep 3;
         }
         else
@@ -288,15 +291,22 @@ sub process_trace
             {
                 if( $aname eq 'newaccount' )
                 {
+                    my $name = $data->{'name'};
+                    if( not defined($name) )
+                    {
+                        # workaround for https://github.com/EOSIO/eosio.contracts/pull/129
+                        $name = $data->{'newact'};
+                    }
+                    
                     push(@{$state->{'addauth'}},
                          {
-                             'account' => $data->{'name'},
+                             'account' => $name,
                              'perm' => 'owner',
                              'auth' => $data->{'owner'},
                          });
                     push(@{$state->{'addauth'}},
                          {
-                             'account' => $data->{'name'},
+                             'account' => $name,
                              'perm' => 'active',
                              'auth' => $data->{'active'},
                          });
