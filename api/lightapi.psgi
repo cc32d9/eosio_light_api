@@ -16,6 +16,7 @@ my $sth_allnetworks;
 my $sth_getnet;
 my $sth_res;
 my $sth_bal;
+my $sth_tokenbal;
 my $sth_perms;
 my $sth_keys;
 my $sth_authacc;
@@ -52,6 +53,11 @@ sub check_dbserver
              'FROM LIGHTAPI_LATEST_CURRENCY ' .
              'WHERE network=? AND account_name=?');
 
+        $sth_tokenbal = $dbh->prepare
+            ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
+             'FROM LIGHTAPI_LATEST_CURRENCY ' .
+             'WHERE network=? AND account_name=? AND contract=? AND currency=? AND deleted=0');
+        
         $sth_perms = $dbh->prepare
             ('SELECT perm, threshold, block_num, block_time, trx_id ' .
              'FROM LIGHTAPI_AUTH_THRESHOLDS ' .
@@ -204,6 +210,38 @@ $builder->mount
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
          $res->body($j->encode($result));
+         $res->finalize;
+     });
+
+$builder->mount
+    ('/api/tokenbalance' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([a-z1-5.]{1,13})\/([A-Z]{1,7})$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected network name, account, contract, and token name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $acc = $2;
+         my $contract = $3;
+         my $currency = $4;
+         check_dbserver();
+         $sth_tokenbal->execute($network, $acc, $contract, $currency);
+         my $r = $sth_tokenbal->fetchall_arrayref({});
+         my $result = '0';
+         if( scalar(@{$r}) > 0 )
+         {
+             $result = sprintf('%.'.$r->[0]{'decimals'} . 'f', $r->[0]{'amount'});
+         }
+         
+         my $res = $req->new_response(200);
+         $res->content_type('text/plain');
+         $res->body($result);
          $res->finalize;
      });
 

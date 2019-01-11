@@ -21,7 +21,10 @@ The API is providing two fundamental functions for EOS blockchain:
   time, and a status: OK if the delay is within 180 seconds, or
   'OUT_OF_SYNC' otherwise.
 
-
+* `http://apihost.domain/api/tokenbalance/eos/ACCOUNT/CONTRACT/TOKEN`
+  returns a plain text with numeric output indicating the token
+  balance. Zero is returned if the token is not present or does not
+  exist.
 
 ## Public endpoints
 
