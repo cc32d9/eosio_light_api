@@ -17,6 +17,7 @@ my $sth_getnet;
 my $sth_res;
 my $sth_bal;
 my $sth_tokenbal;
+my $sth_topholders;
 my $sth_perms;
 my $sth_keys;
 my $sth_authacc;
@@ -57,6 +58,12 @@ sub check_dbserver
             ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
              'FROM LIGHTAPI_LATEST_CURRENCY ' .
              'WHERE network=? AND account_name=? AND contract=? AND currency=? AND deleted=0');
+
+        $sth_topholders = $dbh->prepare
+            ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
+             'FROM LIGHTAPI_LATEST_CURRENCY ' .
+             'WHERE network=? AND contract=? AND currency=? AND deleted=0 ' .
+             'ORDER BY amount DESC LIMIT ?');
         
         $sth_perms = $dbh->prepare
             ('SELECT perm, threshold, block_num, block_time, trx_id ' .
@@ -244,6 +251,50 @@ $builder->mount
          $res->body($result);
          $res->finalize;
      });
+
+$builder->mount
+    ('/api/topholders' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([A-Z]{1,7})\/(\d+)$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected network name, contract, token name, count in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $contract = $2;
+         my $currency = $3;
+         my $count = $4;
+
+         if( $count < 10 or $count > 1000 )
+         {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Invalid count: ' . $count);
+             return $res->finalize;
+         }
+             
+         check_dbserver();
+         $sth_topholders->execute($network, $contract, $currency, $count);
+         my $all = $sth_topholders->fetchall_arrayref({});
+         my $result = [];
+         foreach my $r (@{$all})
+         {
+             push(@{$result}, [$r->{'account_name'}, 
+                               sprintf('%.'.$r->{'decimals'} . 'f', $r->{'amt'})]);
+         }
+         
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
 
 $builder->mount
     ('/api/key' => sub {

@@ -26,6 +26,12 @@ The API is providing two fundamental functions for EOS blockchain:
   balance. Zero is returned if the token is not present or does not
   exist.
 
+* `http://apihost.domain/api/topholders/eos/CONTRACT/TOKEN/NUM` returns
+  top NUM holders of a specified token in a JSON array containing arrays
+  of (account, amount) pairs. NUM must not be less than 10 or more than
+  1000.
+
+
 ## Public endpoints
 
 A list of public API endpoints is served by IPFS, and available with the
@@ -40,7 +46,7 @@ following links:
 
 * GetScatter (https://get-scatter.com/): engineering, hosting and maintenance
 
-* EOS Cafe Block (https://www.eoscafeblock.com/): hosting
+* EOS Cafe Block (https://www.eoscafeblock.com/): new features
 
 
 
