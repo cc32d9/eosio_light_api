@@ -18,6 +18,7 @@ my $sth_res;
 my $sth_bal;
 my $sth_tokenbal;
 my $sth_topholders;
+my $sth_holdercount;
 my $sth_perms;
 my $sth_keys;
 my $sth_authacc;
@@ -64,6 +65,11 @@ sub check_dbserver
              'FROM LIGHTAPI_LATEST_CURRENCY ' .
              'WHERE network=? AND contract=? AND currency=? AND deleted=0 ' .
              'ORDER BY amount DESC LIMIT ?');
+
+        $sth_holdercount = $dbh->prepare
+            ('SELECT count(*) ' .
+             'FROM LIGHTAPI_LATEST_CURRENCY ' .
+             'WHERE network=? AND contract=? AND currency=? AND deleted=0 and amount>0.0');
         
         $sth_perms = $dbh->prepare
             ('SELECT perm, threshold, block_num, block_time, trx_id ' .
@@ -292,6 +298,34 @@ $builder->mount
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
          $res->body($j->encode($result));
+         $res->finalize;
+     });
+
+
+$builder->mount
+    ('/api/holdercount' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([A-Z]{1,7})$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected network name, contract, token name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $contract = $2;
+         my $currency = $3;
+             
+         check_dbserver();
+         $sth_holdercount->execute($network, $contract, $currency);
+         my $all = $sth_holdercount->fetchall_arrayref();
+
+         my $res = $req->new_response(200);
+         $res->content_type('text/plain');
+         $res->body($all->[0][0]);
          $res->finalize;
      });
 

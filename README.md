@@ -32,6 +32,11 @@ The API is providing two fundamental functions for EOS blockchain:
   1000.
 
 
+* `http://apihost.domain/api/holdercount/eos/CONTRACT/TOKEN` returns a
+  plaintext integer indicating the number of accounts with positive
+  balance for a specified token.
+
+
 ## Public endpoints
 
 A list of public API endpoints is served by IPFS, and available with the
