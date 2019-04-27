@@ -74,6 +74,7 @@ my %invalid_contracts;
 
 $sth_fetch->execute($network);
 my $rows = $sth_fetch->fetchall_arrayref({});
+$sth_fetch->finish();
 
 while(my $r = shift(@{$rows}) )
 {
@@ -121,28 +122,26 @@ while(my $r = shift(@{$rows}) )
         my $remove_contract = 0;
         
         my $content = $response->decoded_content();
-
-        if( $content =~ /^\{/ )
+        if( index($content, 'contract_table_query_exception') >= 0 )
         {
-            my $result = $json->decode($content);
-            my $errname = $result->{'error'}{'name'};
-            if( defined($errname) )
-            {
-                if( $errname eq 'contract_table_query_exception' )
-                {
-                    printf("Table not found for account=%s contract=%s symbol=%s\n",
-                           $r->{'account_name'}, $r->{'contract'}, $r->{'currency'});
-                    $regular_error = 1;
-                    $remove_contract = 1;
-                }
-                elsif( $errname eq 'out_of_range_exception' )
-                {
-                    printf("Invalid table for account=%s contract=%s symbol=%s\n",
-                           $r->{'account_name'}, $r->{'contract'}, $r->{'currency'});
-                    $regular_error = 1;
-                    $remove_contract = 1;
-                }
-            }
+            printf("Table not found for account=%s contract=%s symbol=%s\n",
+                   $r->{'account_name'}, $r->{'contract'}, $r->{'currency'});
+            $regular_error = 1;
+            $remove_contract = 1;
+        }
+        elsif( index($content, 'out_of_range_exception') >= 0 )
+        {
+            printf("Invalid table for account=%s contract=%s symbol=%s\n",
+                   $r->{'account_name'}, $r->{'contract'}, $r->{'currency'});
+            $regular_error = 1;
+            $remove_contract = 1;
+        }
+        elsif( index($content, 'symbol_type_exception') >= 0 )
+        {
+            printf("Invalid symbol type for account=%s contract=%s symbol=%s\n",
+                   $r->{'account_name'}, $r->{'contract'}, $r->{'currency'});
+            $regular_error = 1;
+            $remove_contract = 1;
         }
 
         if( not $regular_error )
