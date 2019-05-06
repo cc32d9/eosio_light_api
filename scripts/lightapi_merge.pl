@@ -2,6 +2,7 @@ use strict;
 use warnings;
 use Getopt::Long;
 use DBI;
+use Time::HiRes qw(sleep);
 
 $| = 1;
 
@@ -107,9 +108,10 @@ printf("Processing LIGHTAPI_LATEST_RESOURCE\n");
 
         $sthw_ins->execute(map {$row->{$_}} @columns);
         $c_updated++;
+        $dbhw->commit();
+        sleep(0.01);
     }
         
-    $dbhw->commit();
     printf("fetched %d records, updated %d\n", $c_fetched, $c_updated);
 }
 
@@ -152,9 +154,10 @@ printf("Processing LIGHTAPI_LATEST_CURRENCY\n");
 
         $sthw_ins->execute(map {$row->{$_}} @columns);
         $c_updated++;
+        $dbhw->commit();
+        sleep(0.01);
     }
         
-    $dbhw->commit();
     printf("fetched %d records, updated %d\n", $c_fetched, $c_updated);
 }
 
@@ -236,9 +239,10 @@ printf("Processing LIGHTAPI_AUTH_THRESHOLDS\n");
         }
              
         $c_updated++;
+        $dbhw->commit();
+        sleep(0.01);
     }
         
-    $dbhw->commit();
     printf("fetched %d records, updated %d\n", $c_fetched, $c_updated);
 }
 
