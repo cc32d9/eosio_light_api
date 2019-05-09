@@ -109,7 +109,10 @@ printf("Processing LIGHTAPI_LATEST_RESOURCE\n");
         $sthw_ins->execute(map {$row->{$_}} @columns);
         $c_updated++;
         $dbhw->commit();
-        sleep(0.01);
+        if( $c_updated % 100 == 0 )
+        {
+            sleep(0.1);
+        }
     }
         
     printf("fetched %d records, updated %d\n", $c_fetched, $c_updated);
@@ -155,7 +158,10 @@ printf("Processing LIGHTAPI_LATEST_CURRENCY\n");
         $sthw_ins->execute(map {$row->{$_}} @columns);
         $c_updated++;
         $dbhw->commit();
-        sleep(0.01);
+        if( $c_updated % 100 == 0 )
+        {
+            sleep(0.1);
+        }
     }
         
     printf("fetched %d records, updated %d\n", $c_fetched, $c_updated);
@@ -240,7 +246,10 @@ printf("Processing LIGHTAPI_AUTH_THRESHOLDS\n");
              
         $c_updated++;
         $dbhw->commit();
-        sleep(0.01);
+        if( $c_updated % 100 == 0 )
+        {
+            sleep(0.1);
+        }
     }
         
     printf("fetched %d records, updated %d\n", $c_fetched, $c_updated);
