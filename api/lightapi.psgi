@@ -51,17 +51,17 @@ sub check_dbserver
         $sth_bal = $dbh->prepare
             ('SELECT block_num, block_time, trx_id, contract, currency, ' .
              'CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
-             'FROM LIGHTAPI_LATEST_CURRENCY ' .
+             'FROM LIGHTAPI_CURRENCY_BAL ' .
              'WHERE network=? AND account_name=?');
 
         $sth_tokenbal = $dbh->prepare
             ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
-             'FROM LIGHTAPI_LATEST_CURRENCY ' .
+             'FROM LIGHTAPI_CURRENCY_BAL ' .
              'WHERE network=? AND account_name=? AND contract=? AND currency=? AND deleted=0');
 
         $sth_topholders = $dbh->prepare
             ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
-             'FROM LIGHTAPI_LATEST_CURRENCY ' .
+             'FROM LIGHTAPI_CURRENCY_BAL ' .
              'WHERE network=? AND contract=? AND currency=? AND deleted=0 ' .
              'ORDER BY amount DESC LIMIT ?');
         

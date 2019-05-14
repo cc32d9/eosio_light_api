@@ -6,7 +6,7 @@ grant SELECT on lightapi.* to 'lightapiro'@'%' identified by 'lightapiro';
 
 use lightapi;
 
-CREATE TABLE LIGHTAPI_NETWORKS
+CREATE TABLE NETWORKS
 (
  network           VARCHAR(15) PRIMARY KEY,
  chainid           VARCHAR(64) NOT NULL,
@@ -17,85 +17,62 @@ CREATE TABLE LIGHTAPI_NETWORKS
 ) ENGINE=InnoDB;
 
 
-CREATE TABLE LIGHTAPI_SYNC
+CREATE TABLE SYNC
 (
  network           VARCHAR(15) PRIMARY KEY,
  block_num         BIGINT NOT NULL,
- block_time        DATETIME NOT NULL
-) ENGINE=InnoDB;
-
-
-CREATE TABLE LIGHTAPI_LATEST_RESOURCE
-(
- network           VARCHAR(15) NOT NULL,
- account_name      VARCHAR(13) NOT NULL,
- block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
- trx_id            VARCHAR(64) NOT NULL,
- cpu_weight        BIGINT NOT NULL,
- net_weight        BIGINT NOT NULL,
- ram_quota         INTEGER NOT NULL,
- ram_usage         INTEGER NOT NULL,
- irreversible      TINYINT NOT NULL DEFAULT 0
+ irreversible      BIGINT NOT NULL 
 ) ENGINE=InnoDB;
 
-CREATE UNIQUE INDEX LIGHTAPI_LATEST_RESOURCE_I01 ON LIGHTAPI_LATEST_RESOURCE(network, account_name);
-CREATE INDEX LIGHTAPI_LATEST_RESOURCE_I02 ON LIGHTAPI_LATEST_RESOURCE(network, irreversible, block_num);
 
-CREATE TABLE LIGHTAPI_LATEST_CURRENCY
+
+CREATE TABLE CURRENCY_BAL
  (
  network           VARCHAR(15) NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
- trx_id            VARCHAR(64) NOT NULL,
  contract          VARCHAR(13) NOT NULL,
  currency          VARCHAR(8) NOT NULL,
  amount            DOUBLE PRECISION NOT NULL,
- decimals          TINYINT NOT NULL,
- irreversible      TINYINT NOT NULL DEFAULT 0,
- deleted           TINYINT NOT NULL DEFAULT 0
+ decimals          TINYINT NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE UNIQUE INDEX LIGHTAPI_LATEST_CURRENCY_I01 ON LIGHTAPI_LATEST_CURRENCY (network, account_name, contract, currency);
-CREATE INDEX LIGHTAPI_LATEST_CURRENCY_I02 ON LIGHTAPI_LATEST_CURRENCY (network, contract, currency, amount);
-CREATE INDEX LIGHTAPI_LATEST_CURRENCY_I03 ON LIGHTAPI_LATEST_CURRENCY (network, currency, contract);
-CREATE INDEX LIGHTAPI_LATEST_CURRENCY_I04 ON LIGHTAPI_LATEST_CURRENCY (network, irreversible, block_num);
+CREATE UNIQUE INDEX CURRENCY_BAL_I01 ON CURRENCY_BAL (network, account_name, contract, currency);
+CREATE INDEX CURRENCY_BAL_I02 ON CURRENCY_BAL (network, contract, currency, amount);
+CREATE INDEX CURRENCY_BAL_I03 ON CURRENCY_BAL (network, currency, contract);
 
 
 
-CREATE TABLE LIGHTAPI_AUTH_THRESHOLDS
+CREATE TABLE AUTH_THRESHOLDS
 (
  network           VARCHAR(15) NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
  perm              VARCHAR(13) NOT NULL,
  threshold         INT NOT NULL,
  block_num         BIGINT NOT NULL,
- block_time        DATETIME NOT NULL,
- trx_id            VARCHAR(64) NOT NULL,
- irreversible      TINYINT NOT NULL DEFAULT 0,
- deleted           TINYINT NOT NULL DEFAULT 0
+ block_time        DATETIME NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE UNIQUE INDEX LIGHTAPI_AUTH_THRESHOLDS_I01 ON LIGHTAPI_AUTH_THRESHOLDS (network, account_name, perm);
-CREATE INDEX LIGHTAPI_AUTH_THRESHOLDS_I02 ON LIGHTAPI_AUTH_THRESHOLDS (network, irreversible, block_num);
+CREATE UNIQUE INDEX AUTH_THRESHOLDS_I01 ON AUTH_THRESHOLDS (network, account_name, perm);
 
 
-CREATE TABLE LIGHTAPI_AUTH_KEYS
+CREATE TABLE AUTH_KEYS
 (
  network           VARCHAR(15) NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
  perm              VARCHAR(13) NOT NULL,
- pubkey            VARCHAR(53) NOT NULL,
+ pubkey            VARCHAR(256) NOT NULL,
  weight            INT NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE UNIQUE INDEX LIGHTAPI_AUTH_KEYS_I01 ON LIGHTAPI_AUTH_KEYS (network, account_name, perm, pubkey);
-CREATE INDEX LIGHTAPI_AUTH_KEYS_I02 ON LIGHTAPI_AUTH_KEYS (network, pubkey);
-CREATE INDEX LIGHTAPI_AUTH_KEYS_I03 ON LIGHTAPI_AUTH_KEYS (pubkey);
+CREATE INDEX AUTH_KEYS_I01 ON AUTH_KEYS (network, account_name, perm);
+CREATE INDEX AUTH_KEYS_I02 ON AUTH_KEYS (network, pubkey(32));
+CREATE INDEX AUTH_KEYS_I03 ON AUTH_KEYS (pubkey(32));
 
 
-CREATE TABLE LIGHTAPI_AUTH_ACC
+CREATE TABLE AUTH_ACC
 (
  network           VARCHAR(15) NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
@@ -105,5 +82,140 @@ CREATE TABLE LIGHTAPI_AUTH_ACC
  weight            INT NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE UNIQUE INDEX LIGHTAPI_AUTH_ACC_I01 ON LIGHTAPI_AUTH_ACC (network, account_name, perm, actor, permission);
-CREATE INDEX LIGHTAPI_AUTH_ACC_I02 ON LIGHTAPI_AUTH_ACC (network, actor);
+CREATE UNIQUE INDEX AUTH_ACC_I01 ON AUTH_ACC (network, account_name, perm, actor, permission);
+CREATE INDEX AUTH_ACC_I02 ON AUTH_ACC (network, actor);
+
+
+CREATE TABLE DELBAND
+(
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ del_from          VARCHAR(13) NOT NULL,
+ cpu_weight        DOUBLE PRECISION NOT NULL,
+ net_weight        DOUBLE PRECISION NOT NULL
+) ENGINE=InnoDB;
+
+CREATE UNIQUE INDEX DELBAND_I01 ON DELBAND (network, account_name, del_from);
+
+
+CREATE TABLE CODEHASH
+(
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ code_hash         VARCHAR(64) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE UNIQUE INDEX CODEHASH_I01 ON CODEHASH (network, account_name);
+CREATE INDEX CODEHASH_I02 ON CODEHASH (network, code_hash);
+
+
+
+
+/* ------ Queues of updates before they become irreversible ------ */
+
+CREATE TABLE UPD_CURRENCY_BAL
+ (
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ contract          VARCHAR(13) NOT NULL,
+ currency          VARCHAR(8) NOT NULL,
+ amount            DOUBLE PRECISION NOT NULL,
+ decimals          TINYINT NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+
+CREATE INDEX UPD_CURRENCY_BAL_I01 ON CURRENCY_BAL (network, block_num);
+CREATE INDEX UPD_CURRENCY_BAL_I02 ON CURRENCY_BAL (network, account_name);
+
+
+CREATE TABLE UPD_AUTH_THRESHOLDS
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ perm              VARCHAR(13) NOT NULL,
+ threshold         INT NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_AUTH_THRESHOLDS_I01 ON UPD_AUTH_THRESHOLDS (network, block_num);
+CREATE INDEX UPD_AUTH_THRESHOLDS_I02 ON UPD_AUTH_THRESHOLDS (network, account_name);
+
+
+CREATE TABLE UPD_AUTH_KEYS
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ perm              VARCHAR(13) NOT NULL,
+ pubkey            VARCHAR(256) NOT NULL,
+ weight            INT NOT NULL,
+ block_num         BIGINT NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_AUTH_KEYS_I01 ON UPD_AUTH_KEYS (network, block_num);
+CREATE INDEX UPD_AUTH_KEYS_I02 ON UPD_AUTH_KEYS (network, account_name);
+
+
+
+
+CREATE TABLE UPD_AUTH_ACC
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ perm              VARCHAR(13) NOT NULL,
+ actor             VARCHAR(13) NOT NULL,
+ permission        VARCHAR(13) NOT NULL,
+ weight            INT NOT NULL,
+ block_num         BIGINT NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_AUTH_ACC_I01 ON UPD_AUTH_ACC (network, block_num);
+CREATE INDEX UPD_AUTH_ACC_I02 ON UPD_AUTH_ACC (network, account_name);
+
+
+CREATE TABLE UPD_DELBAND
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ del_from          VARCHAR(13) NOT NULL,
+ cpu_weight        DOUBLE PRECISION NOT NULL,
+ net_weight        DOUBLE PRECISION NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+
+CREATE INDEX UPD_DELBAND_I01 ON UPD_DELBAND (network, block_num);
+CREATE INDEX UPD_DELBAND_I02 ON UPD_DELBAND (network, account_name);
+
+
+
+CREATE TABLE UPD_CODEHASH
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ code_hash         VARCHAR(64) NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_CODEHASH_I01 ON UPD_CODEHASH (network, block_num);
+CREATE INDEX UPD_CODEHASH_I02 ON UPD_CODEHASH (network, account_name);

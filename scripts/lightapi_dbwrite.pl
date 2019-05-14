@@ -1,15 +1,20 @@
 use strict;
 use warnings;
-use ZMQ::Raw;
 use JSON;
 use Getopt::Long;
 use DBI;
+use Net::WebSocket::Server;
+use Protocol::WebSocket::Frame;
+
+$Protocol::WebSocket::Frame::MAX_PAYLOAD_SIZE = 100*1024*1024;
+$Protocol::WebSocket::Frame::MAX_FRAGMENTS_AMOUNT = 102400;
 
 $| = 1;
 
+my $port = 8800;
+my $ack_every = 120;
+
 my $network;
-my $ep_pull;
-my $ep_sub;
 
 my $dsn = 'DBI:MariaDB:database=lightapi;host=localhost';
 my $db_user = 'lightapi';
@@ -18,24 +23,21 @@ my $db_password = 'ce1Shish';
 
 my $ok = GetOptions
     ('network=s' => \$network,
-     'pull=s'    => \$ep_pull,
-     'sub=s'     => \$ep_sub,
+     'port=i'    => \$port,
+     'ack=i'     => \$ack_every,     
      'dsn=s'     => \$dsn,
      'dbuser=s'  => \$db_user,
      'dbpw=s'    => \$db_password);
 
 
-if( not $ok or scalar(@ARGV) > 0 or not $network or
-    (not $ep_pull and not $ep_sub) or
-    ($ep_pull and $ep_sub) )
+if( not $ok or scalar(@ARGV) > 0 or not $network )
 {
     print STDERR "Usage: $0 --network=eos [options...]\n",
-    "The utility connects to EOS ZMQ PUB or PUSH socket and \n",
-    "updates the database\n",
+    "The utility opens a WS port for Chronicle to send data to.\n",
     "Options:\n",
+    "  --port=N           \[$port\] TCP port to listen to websocket connection\n",
+    "  --ack=N            \[$ack_every\] Send acknowledgements every N blocks\n",
     "  --network=NAME     name of EOS network\n",
-    "  --pull=ENDPOINT    connect to a PUSH socket\n",
-    "  --sub=ENDPOINT     connect to a PUB socket\n",
     "  --dsn=DSN          \[$dsn\]\n",
     "  --dbuser=USER      \[$db_user\]\n",
     "  --dbpw=PASSWORD    \[$db_password\]\n";
@@ -43,303 +45,266 @@ if( not $ok or scalar(@ARGV) > 0 or not $network or
 }
 
 our $db;
+my $json = JSON->new;
 
+my $confirmed_block = 0;
+my $unconfirmed_block = 0;
+my $irreversible = 0;
 
-
-my $ctxt = ZMQ::Raw::Context->new;
-my $socket;
-my $connectstr;
-
-if( defined($ep_pull) )
+getdb();
 {
-    $connectstr = $ep_pull;
-    $socket = ZMQ::Raw::Socket->new ($ctxt, ZMQ::Raw->ZMQ_PULL );
-    $socket->setsockopt(ZMQ::Raw::Socket->ZMQ_RCVBUF, 10240);
-    $socket->connect( $connectstr );
-}
-else
-{
-    $connectstr = $ep_sub;
-    $socket = ZMQ::Raw::Socket->new ($ctxt, ZMQ::Raw->ZMQ_SUB );
-    $socket->setsockopt(ZMQ::Raw::Socket->ZMQ_RCVBUF, 10240);
-    $socket->setsockopt(ZMQ::Raw::Socket->ZMQ_SUBSCRIBE, '');
-    $socket->connect( $connectstr );
-}    
-
-
-my $sighandler = sub {
-    print STDERR ("Disconnecting the ZMQ socket\n");
-    $socket->disconnect($connectstr);
-    $socket->close();
-    print STDERR ("Finished\n");
-    exit;
-};
-
-$SIG{'HUP'} = $sighandler;
-$SIG{'TERM'} = $sighandler;
-$SIG{'INT'} = $sighandler;
-
-
-my $json = JSON->new->pretty->canonical;
-
-while(1)
-{
-    my $data = $socket->recv();
-    my ($msgtype, $opts, $js) = unpack('VVa*', $data);
-
-    my $where = '';
-    my $ok = 0;
-    while( not $ok )
+    my $sth = $db->{'dbh'}->prepare
+        ('SELECT block_num, irreversible FROM SYNC WHERE network=?');
+    $sth->execute($network);
+    my $r = $sth->fetchall_arrayref();
+    if( scalar(@{$r}) > 0 )
     {
-        eval {
-            getdb();
-            if( $msgtype == 0 )  # action and balances
-            {
-                my $action = $json->decode($js);
-                
-                my $tx = $action->{'action_trace'}{'trx_id'};
-                my $block_time =  $action->{'block_time'};
-                $block_time =~ s/T/ /;
+        $confirmed_block = $r->[0][0];
+        $irreversible = $r->[0][1];
+    }
+}
 
-                my $block_num = $action->{'block_num'};
-                $where = 'tx=' . $tx . ';action=' . $action->{'action_trace'}{'act'}{'name'};
-                
-                foreach my $bal (@{$action->{'resource_balances'}})
+
+Net::WebSocket::Server->new(
+    listen => $port,
+    on_connect => sub {
+        my ($serv, $conn) = @_;
+        $conn->on(
+            'binary' => sub {
+                my ($conn, $msg) = @_;
+                my ($msgtype, $opts, $js) = unpack('VVa*', $msg);
+                my $data = eval {$json->decode($js)};
+                if( $@ )
                 {
-                    my $account = $bal->{'account_name'};
-                    
-                    $db->{'sth_check_res_block'}->execute($network, $account);
-                    my $r = $db->{'sth_check_res_block'}->fetchall_arrayref();
-                    if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num and $r->[0][1] )
-                    {
-                        next;
-                    }
-                    
-                    my $cpuw = $bal->{'cpu_weight'};
-                    my $netw = $bal->{'net_weight'};
-                    my $quota = $bal->{'ram_quota'};
-                    my $usage = $bal->{'ram_usage'};
-                    
-                    $db->{'sth_ins_last_res'}->execute
-                        ($network, $account, $block_num, $block_time, $tx,
-                         $cpuw, $netw, $quota, $usage,
-                         $block_num, $block_time, $tx,
-                         $cpuw, $netw, $quota, $usage);
+                    print STDERR $@, "\n\n";
+                    print STDERR $js, "\n";
+                    exit;
+                } 
+                
+                my $ack = process_data($msgtype, $data, \$js);
+                if( $ack > 0 )
+                {
+                    $conn->send_binary(sprintf("%d", $ack));
+                    print STDERR "ack $ack\n";
                 }
-                
-                foreach my $bal (@{$action->{'currency_balances'}})
+            },
+            'disconnect' => sub {
+                if( defined($db->{'dbh'}) )
                 {
-                    my $account = $bal->{'account_name'};
-                    my $contract = $bal->{'contract'};
-                    my ($amount, $currency) = split(/\s+/, $bal->{'balance'});
-                    my $deleted = $bal->{'deleted'}?1:0;
-                        
-                    $db->{'sth_check_curr_block'}->execute($network, $account, $contract, $currency);
-                    my $r = $db->{'sth_check_curr_block'}->fetchall_arrayref();
-                    if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num and $r->[0][1] )
-                    {
-                        next;
-                    }
+                    $db->{'dbh'}->disconnect();
+                }
+                print STDERR "Disconnected\n";
+            },
+            
+            );
+    },
+    )->start;
 
-                    my $decimals;
-                    if( scalar(@{$r}) > 0 )
+
+sub process_data
+{
+    my $msgtype = shift;
+    my $data = shift;
+    my $jsptr = shift;
+
+    if( $msgtype == 1001 ) # CHRONICLE_MSGTYPE_FORK
+    {
+        my $block_num = $data->{'block_num'};
+        print STDERR "fork at $block_num\n";
+
+        $db->{'sth_fork_sync'}->execute($block_num, $network);
+        $db->{'sth_fork_currency'}->execute($network, $block_num);
+        $db->{'sth_fork_auth_thresholds'}->execute($network, $block_num);
+        $db->{'sth_fork_auth_keys'}->execute($network, $block_num);
+        $db->{'sth_fork_auth_acc'}->execute($network, $block_num);
+        $db->{'sth_fork_delband'}->execute($network, $block_num);
+        $db->{'sth_fork_codehash'}->execute($network, $block_num);
+        $db->{'dbh'}->commit();
+        $confirmed_block = $block_num;
+        $unconfirmed_block = 0;
+        return $block_num;
+    }
+    elsif( $msgtype == 1003 ) # CHRONICLE_MSGTYPE_TX_TRACE
+    {
+        my $trace = $data->{'trace'};
+        if( $trace->{'status'} eq 'executed' )
+        {
+            my $block_num = $data->{'block_num'};
+            my $block_time = $data->{'block_timestamp'};
+            $block_time =~ s/T/ /;
+            
+            my $state = {'addauth' => [], 'delauth' => []};
+            foreach my $atrace ( @{$trace->{'action_traces'}} )
+            {
+                my $act = $atrace->{'act'};
+                
+                if( $atrace->{'receipt'}{'receiver'} eq 'eosio' and $act->{'account'} eq 'eosio' )
+                {
+                    my $aname = $act->{'name'};
+                    my $data = $act->{'data'};
+                    
+                    if( ref($data) eq 'HASH' )
                     {
-                        $decimals = $r->[0][2];
-                    }
-                    else
-                    {
-                        my $pos = index($amount, '.');
-                        if( $pos == -1 )
+                        if( $aname eq 'newaccount' )
                         {
-                            $decimals = 0;
+                            my $name = $data->{'name'};
+                            if( not defined($name) )
+                            {
+                                # workaround for https://github.com/EOSIO/eosio.contracts/pull/129
+                                $name = $data->{'newact'};
+                            }
+                            
+                            push(@{$state->{'addauth'}},
+                                 {
+                                     'account' => $name,
+                                     'perm' => 'owner',
+                                     'auth' => $data->{'owner'},
+                                 });
+                            push(@{$state->{'addauth'}},
+                                 {
+                                     'account' => $name,
+                                     'perm' => 'active',
+                                     'auth' => $data->{'active'},
+                                 });
                         }
-                        else
+                        elsif( $aname eq 'updateauth' )
                         {
-                            $decimals = length($amount) - $pos - 1;
+                            push(@{$state->{'addauth'}},
+                                 {
+                                     'account' => $data->{'account'},
+                                     'perm' => $data->{'permission'},
+                                     'auth' => $data->{'auth'},
+                                 });
+                        }
+                        elsif( $aname eq 'deleteauth' )
+                        {
+                            push(@{$state->{'delauth'}},
+                                 {
+                                     'account' => $data->{'account'},
+                                     'perm' => $data->{'permission'},
+                                 });
+                        }
+                        elsif( $aname eq 'delegatebw' )
+                        {
+                            my ($cpu, $curr1) = split(/\s/, $data->{'stake_cpu_quantity'});
+                            my ($net, $curr2) = split(/\s/, $data->{'stake_net_quantity'});
+                            
+                            $db->{'sth_upd_delband'}->execute
+                                ($network, $data->{'receiver'}, $block_num, $block_time,
+                                 $data->{'from'}, $cpu, $net, 0);
+                        }
+                        elsif( $aname eq 'undelegatebw' )
+                        {
+                            my ($cpu, $curr1) = split(/\s/, $data->{'unstake_cpu_quantity'});
+                            my ($net, $curr2) = split(/\s/, $data->{'unstake_net_quantity'});
+                            
+                            $db->{'sth_upd_delband'}->execute
+                                ($network, $data->{'receiver'}, $block_num, $block_time,
+                                 $data->{'from'}, $cpu, $net, 1);
                         }
                     }
-                    
-                    $db->{'sth_ins_last_curr'}->execute
-                        ($network, $account, $block_num, $block_time, $tx,
-                         $contract, $currency, $amount, $decimals, $deleted,
-                         $block_num, $block_time, $tx, $amount, $deleted);
                 }
+            }
 
-                my $atrace = $action->{'action_trace'};
-                my $state = {'addauth' => [], 'delauth' => []};
-                process_trace($atrace, $state);
+            foreach my $authdata (@{$state->{'delauth'}})
+            {
+                my $account = $authdata->{'account'};
+                my $perm = $authdata->{'perm'};
+                                
+                $db->{'sth_upd_auth_thres'}->execute
+                    ($network, $account, $perm, $threshold, 
+                     $block_num, $block_time, 1);
+                $db->{'sth_upd_auth_keys'}->execute
+                    ($network, $account, $perm, '', 0, $block_num, 1);
+                $db->{'sth_upd_auth_acc'}->execute
+                    ($network, $account, $perm, '', '', 0, $block_num, 1);
+            }
+            
+            foreach my $authdata (@{$state->{'addauth'}})
+            {
+                my $account = $authdata->{'account'};
+                my $perm = $authdata->{'perm'};
+                my $auth = $authdata->{'auth'};
+                my $threshold = $auth->{'threshold'};
 
-                foreach my $authdata (@{$state->{'delauth'}})
-                {
-                    my $account = $authdata->{'account'};
-                    my $perm = $authdata->{'perm'};
-                    
-                    $db->{'sth_check_auth_block'}->execute($network, $account, $perm);
-                    my $r = $db->{'sth_check_auth_block'}->fetchall_arrayref();
-                    if( scalar(@{$r}) == 0 or ($r->[0][0] >= $block_num and $r->[0][1]) )
-                    {
-                        next;
-                    }
-                    
-                    $db->{'sth_del_auth_thres'}->execute
-                        ($block_num, $block_time, $tx, $network, $account, $perm);
-                    $db->{'sth_del_auth_keys'}->execute($network, $account, $perm);
-                    $db->{'sth_del_auth_acc'}->execute($network, $account, $perm);
-                }
+                $db->{'sth_upd_auth_thres'}->execute
+                    ($network, $account, $perm, $threshold, 
+                     $block_num, $block_time, 0);
+
+                # delete old keys and accounts, and add new ones
                 
-                foreach my $authdata (@{$state->{'addauth'}})
+                $db->{'sth_upd_auth_keys'}->execute
+                    ($network, $account, $perm, '', 0, $block_num, 1);
+                $db->{'sth_upd_auth_acc'}->execute
+                    ($network, $account, $perm, '', '', 0, $block_num, 1);
+
+                foreach my $keydata (@{$auth->{'keys'}})
                 {
-                    my $account = $authdata->{'account'};
-                    my $perm = $authdata->{'perm'};
+                    $db->{'sth_upd_auth_key'}->execute
+                        ($network, $account, $perm, $keydata->{'key'}, $keydata->{'weight'},
+                         $block_num, 0);
+                }
                     
-                    $db->{'sth_check_auth_block'}->execute($network, $account, $perm);
-                    my $r = $db->{'sth_check_auth_block'}->fetchall_arrayref();
-                    if( scalar(@{$r}) > 0 and $r->[0][0] >= $block_num and $r->[0][1] )
-                    {
-                        next;
-                    }
-
-                    my $auth = $authdata->{'auth'};
-                    my $threshold = $auth->{'threshold'};
-
-                    $db->{'sth_ins_auth_thres'}->execute
-                        ($network, $account, $perm, $threshold, 
-                         $block_num, $block_time, $tx,
-                         $threshold, $block_num, $block_time, $tx);
-                    
-                    $db->{'sth_del_auth_keys'}->execute($network, $account, $perm);
-                    $db->{'sth_del_auth_acc'}->execute($network, $account, $perm);
-
-                    foreach my $keydata (@{$auth->{'keys'}})
-                    {
-                        $db->{'sth_ins_auth_key'}->execute
-                            ($network, $account, $perm, $keydata->{'key'}, $keydata->{'weight'});
-                    }
-                    
-                    foreach my $accdata (@{$auth->{'accounts'}})
-                    {
-                        $db->{'sth_ins_auth_acc'}->execute
-                            ($network, $account, $perm, $accdata->{'permission'}{'actor'},
-                             $accdata->{'permission'}{'permission'},
-                             $accdata->{'weight'});
-                    }            
+                foreach my $accdata (@{$auth->{'accounts'}})
+                {
+                    $db->{'sth_upd_auth_acc'}->execute
+                        ($network, $account, $perm, $accdata->{'permission'}{'actor'},
+                         $accdata->{'permission'}{'permission'}, $accdata->{'weight'},
+                         $block_num, 0);
                 }
             }
-            elsif( $msgtype == 3 )  # accepted block
-            {
-                my $data = $json->decode($js);
-                my $block_num = $data->{'accepted_block_num'};
-                my $block_time = $data->{'accepted_block_timestamp'};
-                $block_time =~ s/T/ /;
-                $where = 'accepted_block=' . $block_num;
-                $db->{'sth_upd_sync'}->execute($block_num, $block_time, $network);
-            }
-            elsif( $msgtype == 1 )  # irreversible block
-            {
-                my $data = $json->decode($js);
-                my $block_num = $data->{'irreversible_block_num'};
-                $where = 'irreversible_block=' . $block_num;
-                $db->{'sth_upd_irrev_res'}->execute($network, $block_num);
-                $db->{'sth_upd_irrev_curr'}->execute($network, $block_num);
-                $db->{'sth_upd_irrev_auth'}->execute($network, $block_num);
-            }
-
-            $db->{'dbh'}->commit();
-        };
-
-        if( $@ )
-        {
-            print STDERR $@, " at $where\n";
-            sleep 3;
-        }
-        else
-        {
-            $ok = 1;
         }
     }
-}
-
-
-print STDERR "The stream ended\n";
-
-if( defined($db->{'dbh'}) )
-{
-    $db->{'dbh'}->disconnect();
-}
-
-
-
-
-
-sub process_trace
-{
-    my $atrace = shift;
-    my $state = shift;
-
-    my $gseq = $atrace->{'receipt'}{'global_sequence'};
-    if( not defined($state->{'seqs'}{$gseq}) )
+    elsif( $msgtype == 1009 ) # CHRONICLE_MSGTYPE_RCVR_PAUSE
     {
-        $state->{'seqs'}{$gseq} = 1;
-        my $act = $atrace->{'act'};
-
-        if( $atrace->{'receipt'}{'receiver'} eq 'eosio' and $act->{'account'} eq 'eosio' )
+        if( $unconfirmed_block > $confirmed_block )
         {
-            my $aname = $act->{'name'};
-            my $data = $act->{'data'};
-
-            if( ref($data) eq 'HASH' )
-            {
-                if( $aname eq 'newaccount' )
-                {
-                    my $name = $data->{'name'};
-                    if( not defined($name) )
-                    {
-                        # workaround for https://github.com/EOSIO/eosio.contracts/pull/129
-                        $name = $data->{'newact'};
-                    }
-                    
-                    push(@{$state->{'addauth'}},
-                         {
-                             'account' => $name,
-                             'perm' => 'owner',
-                             'auth' => $data->{'owner'},
-                         });
-                    push(@{$state->{'addauth'}},
-                         {
-                             'account' => $name,
-                             'perm' => 'active',
-                             'auth' => $data->{'active'},
-                         });
-                }
-                elsif( $aname eq 'updateauth' )
-                {
-                    push(@{$state->{'addauth'}},
-                         {
-                             'account' => $data->{'account'},
-                             'perm' => $data->{'permission'},
-                             'auth' => $data->{'auth'},
-                         });
-                }
-                elsif( $aname eq 'deleteauth' )
-                {
-                    push(@{$state->{'delauth'}},
-                         {
-                             'account' => $data->{'account'},
-                             'perm' => $data->{'permission'},
-                         });
-                }
-            }
+            $confirmed_block = $unconfirmed_block;
+            return $confirmed_block;
         }
     }
-
-    if( defined($atrace->{'inline_traces'}) )
+    elsif( $msgtype == 1010 ) # CHRONICLE_MSGTYPE_BLOCK_COMPLETED
     {
-        foreach my $trace (@{$atrace->{'inline_traces'}})
+        my $block_num = $data->{'block_num'};
+        my $block_time = $data->{'block_timestamp'};
+        $block_time =~ s/T/ /;
+        $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $network);
+        $db->{'dbh'}->commit();
+        
+        my $last_irreversible = $data->{'last_irreversible'};
+        if( $last_irreversible > $irreversible )
         {
-            process_trace($trace, $state);
+            $db->{'sth_get_upd_currency'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_currency'}->fetchrow_hashref('NAME_lc'))
+            {
+                if( $r->{'deleted'} )
+                {
+                    $db->{'sth_erase_currency'}->execute
+                        ($network, map {$r->{$_}} qw(account_name contract currency));
+                }
+                else
+                {
+                    $db->{'sth_save_currency'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(account_name block_num block_time contract currency amount decimals));
+                }
+            }
+            $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
+
+        }
+            
+
+        $unconfirmed_block = $block_num;
+        if( $unconfirmed_block - $confirmed_block >= $ack_every )
+        {
+            $confirmed_block = $unconfirmed_block;
+            return $confirmed_block;
         }
     }
 }
+    
+    
+
 
 
 sub getdb
@@ -354,73 +319,65 @@ sub getdb
                                            mariadb_server_prepare => 1});
     die($DBI::errstr) unless $dbh;
 
-    $db->{'sth_check_res_block'} = $dbh->prepare
-        ('SELECT block_num, irreversible FROM LIGHTAPI_LATEST_RESOURCE ' .
-         'WHERE network=? AND account_name=?');
-    
-    $db->{'sth_ins_last_res'} = $dbh->prepare
-        ('INSERT INTO LIGHTAPI_LATEST_RESOURCE ' . 
-         '(network, account_name, block_num, block_time, trx_id, ' .
-         'cpu_weight, net_weight, ram_quota, ram_usage) ' .
-         'VALUES(?,?,?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, ' .
-         'cpu_weight=?, net_weight=?, ram_quota=?, ram_usage=?, irreversible=0');
+    $db->{'sth_fork_sync'} = $dbh->prepare
+        ('UPDATE SYNC SET block_num=? WHERE network = ?');
+
+    $db->{'sth_fork_currency'} = $dbh->prepare
+        ('DELETE FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_fork_auth_thresholds'} = $dbh->prepare
+        ('DELETE FROM UPD_AUTH_THRESHOLDS WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_fork_auth_keys'} = $dbh->prepare
+        ('DELETE FROM UPD_AUTH_KEYS WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_fork_auth_acc'} = $dbh->prepare
+        ('DELETE FROM UPD_AUTH_ACC WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_fork_delband'} = $dbh->prepare
+        ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_fork_codehash'} = $dbh->prepare
+        ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
 
 
-    $db->{'sth_check_curr_block'} = $dbh->prepare
-        ('SELECT block_num, irreversible, decimals FROM LIGHTAPI_LATEST_CURRENCY ' .
-         'WHERE network=? AND account_name=? AND contract=? AND currency=?');
-    
+    $db->{'sth_upd_auth_thres'} = $dbh->prepare
+        ('INSERT INTO UPD_AUTH_THRESHOLDS ' . 
+         '(network, account_name, perm, threshold, block_num, block_time, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?)');
 
-    $db->{'sth_ins_last_curr'} = $dbh->prepare
-        ('INSERT INTO LIGHTAPI_LATEST_CURRENCY ' . 
-         '(network, account_name, block_num, block_time, trx_id, ' .
-         'contract, currency, amount, decimals, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, trx_id=?, amount=?, irreversible=0, deleted=?');
-
-
-    $db->{'sth_check_auth_block'} = $dbh->prepare
-        ('SELECT block_num, irreversible FROM LIGHTAPI_AUTH_THRESHOLDS ' .
-         'WHERE network=? AND account_name=? AND perm=?');
-    
-    $db->{'sth_ins_auth_thres'} = $dbh->prepare
-        ('INSERT INTO LIGHTAPI_AUTH_THRESHOLDS ' . 
-         '(network, account_name, perm, threshold, block_num, block_time, trx_id) ' .
-         'VALUES(?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE threshold=?, block_num=?, block_time=?, trx_id=?, ' .
-         'deleted=0, irreversible=0');
-
-    $db->{'sth_del_auth_thres'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_AUTH_THRESHOLDS SET ' .
-         'deleted=1, threshold=0, block_num=?, block_time=?, trx_id=?, irreversible=0 ' .
-         'WHERE network=? AND account_name=? AND perm=?');
-
-    $db->{'sth_del_auth_keys'} = $dbh->prepare
-        ('DELETE FROM LIGHTAPI_AUTH_KEYS WHERE network=? AND account_name=? AND perm=?');
-
-    $db->{'sth_del_auth_acc'} = $dbh->prepare
-        ('DELETE FROM LIGHTAPI_AUTH_ACC WHERE network=? AND account_name=? AND perm=?');
-
-    $db->{'sth_ins_auth_key'} = $dbh->prepare
-        ('INSERT INTO LIGHTAPI_AUTH_KEYS ' . 
-         '(network, account_name, perm, pubkey, weight) ' .
-         'VALUES(?,?,?,?,?)');
+    $db->{'sth_upd_auth_keys'} = $dbh->prepare
+        ('INSERT INTO UPD_AUTH_KEYS ' . 
+         '(network, account_name, perm, pubkey, weight, block_num, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?)');
 
     $db->{'sth_ins_auth_acc'} = $dbh->prepare
-        ('INSERT INTO LIGHTAPI_AUTH_ACC ' . 
-         '(network, account_name, perm, actor, permission, weight) ' .
-         'VALUES(?,?,?,?,?,?)');
+        ('INSERT INTO UPD_AUTH_ACC ' . 
+         '(network, account_name, perm, actor, permission, weight, block_num, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?)');
 
-    $db->{'sth_upd_sync'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_SYNC SET block_num=?, block_time=? WHERE network=?');
+    $db->{'sth_upd_delband'} = $dbh->prepare
+        ('INSERT INTO UPD_DELBAND ' . 
+         '(network, account_name, block_num, block_time, del_from, cpu_weight, net_weight, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?)');
+
+    $db->{'sth_upd_sync_head'} = $dbh->prepare
+        ('UPDATE SYNC SET block_num=?, block_time=? WHERE network = ?');
+
+
+    $db->{'sth_get_upd_currency'} = $dbh->prepare
+        ('SELECT account_name, block_num, block_time, contract, currency, amount, decimals, deleted ' .
+         'FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num <= ? ORDER BY id');
     
-    $db->{'sth_upd_irrev_res'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_LATEST_RESOURCE SET irreversible=1 WHERE network=? AND irreversible=0 AND block_num<=?');
-
-    $db->{'sth_upd_irrev_curr'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_LATEST_CURRENCY SET irreversible=1 WHERE network=? AND irreversible=0 AND block_num<=?');
-
-    $db->{'sth_upd_irrev_auth'} = $dbh->prepare
-        ('UPDATE LIGHTAPI_AUTH_THRESHOLDS SET irreversible=1 WHERE network=? AND irreversible=0 AND block_num<=?');
+    $db->{'sth_save_currency'} = $dbh->prepare
+        ('INSERT INTO CURRENCY_BAL ' .
+         '(network, account_name, block_num, block_time, contract, currency, amount, decimals) ' .
+         'VALUES(?,?,?,?,?,?,?,?)');
+    
+    $db->{'sth_erase_currency'} = $dbh->prepare
+        ('DELETE FROM CURRENCY_BAL WHERE ' .
+         'network=? and account_name=? and contract=?, currency=?');
+    
+    $db->{'sth_del_upd_currency'} = $dbh->prepare
+        ('DELETE FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num <= ?');
 }
