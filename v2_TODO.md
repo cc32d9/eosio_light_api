@@ -17,9 +17,7 @@ API should merge data from reversible and irreversible tables.
 
 ## New features
 
-* RAM purchase tracking: who bought how much RAM for each account.
-
-* Code hash indexing: fiding contracts with the same code will be
+* Code hash indexing: finding contracts with the same code will be
   easier.
 
 * Bandwidth delegation tracking: who delegated how much CPU/NET to a
