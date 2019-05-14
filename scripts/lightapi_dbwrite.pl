@@ -104,6 +104,7 @@ Net::WebSocket::Server->new(
                 if( defined($db->{'dbh'}) )
                 {
                     $db->{'dbh'}->disconnect();
+                    delete $db->{'dbh'};
                 }
                 print STDERR "Disconnected\n";
             },
@@ -124,6 +125,7 @@ sub process_data
         my $block_num = $data->{'block_num'};
         print STDERR "fork at $block_num\n";
 
+        getdb();
         $db->{'sth_fork_sync'}->execute($block_num, $network);
         $db->{'sth_fork_currency'}->execute($network, $block_num);
         $db->{'sth_fork_auth'}->execute($network, $block_num);
@@ -259,6 +261,7 @@ sub process_data
     }
     elsif( $msgtype == 1010 ) # CHRONICLE_MSGTYPE_BLOCK_COMPLETED
     {
+        getdb();
         my $block_num = $data->{'block_num'};
         my $block_time = $data->{'block_timestamp'};
         $block_time =~ s/T/ /;
@@ -394,7 +397,7 @@ sub process_data
 
 sub getdb
 {
-    if( defined($db) and $db->{'dbh'}->ping() )
+    if( defined($db) and defined($db->{'dbh'}) and $db->{'dbh'}->ping() )
     {
         return;
     }
