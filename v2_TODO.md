@@ -23,6 +23,8 @@ API should merge data from reversible and irreversible tables.
 * Bandwidth delegation tracking: who delegated how much CPU/NET to a
   particular account.
 
+* linkauth/unlinkauth tracking
+
 * Support for R1 and K1 keys. The API should report K1 keys in legacy
   format (EOSxxx), and optionally in new format.
 

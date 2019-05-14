@@ -47,11 +47,22 @@ if( not $ok or scalar(@ARGV) > 0 or not $network )
 our $db;
 my $json = JSON->new;
 
+my $presicion;
+
 my $confirmed_block = 0;
 my $unconfirmed_block = 0;
 my $irreversible = 0;
 
 getdb();
+{
+    my $sth = $db->{'dbh'}->prepare
+        ('SELECT decimals FROM NETWORKS WHERE network=?');
+    $sth->execute($network);
+    my $r = $sth->fetchall_arrayref();
+    die("Unknown network: $network") if scalar(@{$r}) == 0;
+    my $decimals = $r->[0][0];
+    $presicion = 10**$decimals;
+}
 {
     my $sth = $db->{'dbh'}->prepare
         ('SELECT block_num, irreversible FROM SYNC WHERE network=?');
@@ -114,9 +125,7 @@ sub process_data
 
         $db->{'sth_fork_sync'}->execute($block_num, $network);
         $db->{'sth_fork_currency'}->execute($network, $block_num);
-        $db->{'sth_fork_auth_thresholds'}->execute($network, $block_num);
-        $db->{'sth_fork_auth_keys'}->execute($network, $block_num);
-        $db->{'sth_fork_auth_acc'}->execute($network, $block_num);
+        $db->{'sth_fork_auth'}->execute($network, $block_num);
         $db->{'sth_fork_delband'}->execute($network, $block_num);
         $db->{'sth_fork_codehash'}->execute($network, $block_num);
         $db->{'dbh'}->commit();
@@ -133,7 +142,6 @@ sub process_data
             my $block_time = $data->{'block_timestamp'};
             $block_time =~ s/T/ /;
             
-            my $state = {'addauth' => [], 'delauth' => []};
             foreach my $atrace ( @{$trace->{'action_traces'}} )
             {
                 my $act = $atrace->{'act'};
@@ -154,35 +162,25 @@ sub process_data
                                 $name = $data->{'newact'};
                             }
                             
-                            push(@{$state->{'addauth'}},
-                                 {
-                                     'account' => $name,
-                                     'perm' => 'owner',
-                                     'auth' => $data->{'owner'},
-                                 });
-                            push(@{$state->{'addauth'}},
-                                 {
-                                     'account' => $name,
-                                     'perm' => 'active',
-                                     'auth' => $data->{'active'},
-                                 });
+                            $db->{'sth_upd_auth'}->execute
+                                ($network, $name, $block_num, $block_time, 'owner',
+                                 $json->encode($data->{'owner'}), 0);
+                            
+                            $db->{'sth_upd_auth'}->execute
+                                ($network, $name, $block_num, $block_time, 'active',
+                                 $json->encode($data->{'active'}), 0);
                         }
                         elsif( $aname eq 'updateauth' )
                         {
-                            push(@{$state->{'addauth'}},
-                                 {
-                                     'account' => $data->{'account'},
-                                     'perm' => $data->{'permission'},
-                                     'auth' => $data->{'auth'},
-                                 });
+                            $db->{'sth_upd_auth'}->execute
+                                ($network, $data->{'account'}, $block_num, $block_time,
+                                 $data->{'permission'}, $json->encode($data->{'auth'}), 0);
                         }
                         elsif( $aname eq 'deleteauth' )
                         {
-                            push(@{$state->{'delauth'}},
-                                 {
-                                     'account' => $data->{'account'},
-                                     'perm' => $data->{'permission'},
-                                 });
+                            $db->{'sth_upd_auth'}->execute
+                                ($network, $data->{'account'}, $block_num, $block_time,
+                                 $data->{'permission'}, '{}', 1);
                         }
                         elsif( $aname eq 'delegatebw' )
                         {
@@ -191,7 +189,7 @@ sub process_data
                             
                             $db->{'sth_upd_delband'}->execute
                                 ($network, $data->{'receiver'}, $block_num, $block_time,
-                                 $data->{'from'}, $cpu, $net, 0);
+                                 $data->{'from'}, $cpu*$presicion, $net*$presicion, 0);
                         }
                         elsif( $aname eq 'undelegatebw' )
                         {
@@ -200,57 +198,9 @@ sub process_data
                             
                             $db->{'sth_upd_delband'}->execute
                                 ($network, $data->{'receiver'}, $block_num, $block_time,
-                                 $data->{'from'}, $cpu, $net, 1);
+                                 $data->{'from'}, $cpu*$presicion, $net*$presicion, 1);
                         }
                     }
-                }
-            }
-
-            foreach my $authdata (@{$state->{'delauth'}})
-            {
-                my $account = $authdata->{'account'};
-                my $perm = $authdata->{'perm'};
-                                
-                $db->{'sth_upd_auth_thres'}->execute
-                    ($network, $account, $perm, $threshold, 
-                     $block_num, $block_time, 1);
-                $db->{'sth_upd_auth_keys'}->execute
-                    ($network, $account, $perm, '', 0, $block_num, 1);
-                $db->{'sth_upd_auth_acc'}->execute
-                    ($network, $account, $perm, '', '', 0, $block_num, 1);
-            }
-            
-            foreach my $authdata (@{$state->{'addauth'}})
-            {
-                my $account = $authdata->{'account'};
-                my $perm = $authdata->{'perm'};
-                my $auth = $authdata->{'auth'};
-                my $threshold = $auth->{'threshold'};
-
-                $db->{'sth_upd_auth_thres'}->execute
-                    ($network, $account, $perm, $threshold, 
-                     $block_num, $block_time, 0);
-
-                # delete old keys and accounts, and add new ones
-                
-                $db->{'sth_upd_auth_keys'}->execute
-                    ($network, $account, $perm, '', 0, $block_num, 1);
-                $db->{'sth_upd_auth_acc'}->execute
-                    ($network, $account, $perm, '', '', 0, $block_num, 1);
-
-                foreach my $keydata (@{$auth->{'keys'}})
-                {
-                    $db->{'sth_upd_auth_key'}->execute
-                        ($network, $account, $perm, $keydata->{'key'}, $keydata->{'weight'},
-                         $block_num, 0);
-                }
-                    
-                foreach my $accdata (@{$auth->{'accounts'}})
-                {
-                    $db->{'sth_upd_auth_acc'}->execute
-                        ($network, $account, $perm, $accdata->{'permission'}{'actor'},
-                         $accdata->{'permission'}{'permission'}, $accdata->{'weight'},
-                         $block_num, 0);
                 }
             }
         }
@@ -274,6 +224,7 @@ sub process_data
         my $last_irreversible = $data->{'last_irreversible'};
         if( $last_irreversible > $irreversible )
         {
+            ## currency balances
             $db->{'sth_get_upd_currency'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_currency'}->fetchrow_hashref('NAME_lc'))
             {
@@ -291,6 +242,76 @@ sub process_data
             }
             $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
 
+            ## authorization
+            $db->{'sth_get_upd_auth'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_auth'}->fetchrow_hashref('NAME_lc'))
+            {
+                my @arg = ($network, $r->{'account_name'}, $r->{'perm'});
+                $db->{'sth_erase_auth_thres'}->execute(@arg);
+                $db->{'sth_erase_auth_keys'}->execute(@arg);
+                $db->{'sth_erase_auth_acc'}->execute(@arg);
+
+                if( not $r->{'deleted'} )
+                {
+                    my $auth = $json->decode($r->{'jsdata'});
+                    $db->{'sth_save_auth_thres'}->execute
+                        (@arg, $auth->{'threshold'}, $r->{'block_num'},$r->{'block_time'});
+                    
+                    foreach my $keydata (@{$auth->{'keys'}})
+                    {
+                        $db->{'sth_save_auth_keys'}->execute
+                            (@arg, $keydata->{'key'}, $keydata->{'weight'});
+                    }
+                    
+                    foreach my $accdata (@{$auth->{'accounts'}})
+                    {
+                        $db->{'sth_save_auth_acc'}->execute
+                        (@arg, $accdata->{'permission'}{'actor'},
+                         $accdata->{'permission'}{'permission'}, $accdata->{'weight'});
+                    }
+                }
+            }
+            $db->{'sth_del_upd_auth'}->execute($network, $last_irreversible);
+
+
+            ## delegated bandwidth
+            $db->{'sth_get_upd_delband'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_delband'}->fetchrow_hashref('NAME_lc'))
+            {
+                my @arg = ($network, $r->{'account_name'}, $r->{'del_from'});
+                my $cpu = 0;
+                my $net = 0;
+                my $isnew = 1;
+                $db->{'sth_get_current_delband'}->execute(@arg);
+                my $res = $db->{'sth_get_current_delband'}->fetchall_arrayref();
+                if( scalar(@{$res}) > 0 )
+                {
+                    $cpu = $res->[0][0];
+                    $net = $res->[0][1];
+                    $isnew = 0;
+                }
+
+                my $mult = $r->{'deleted'}?-1:1;
+                $cpu += $r->{'cpu_weight'} * $mult;
+                $net += $r->{'net_weight'} * $mult;
+                if( $cpu == 0 and $net == 0 )
+                {
+                    $db->{'sth_erase_delband'}->execute(@arg);
+                }
+                elsif( $isnew )
+                {
+                    $db->{'sth_insert_delband'}->execute
+                        (@arg, $r->{'block_num'},$r->{'block_time'}, $cpu, $net);
+                }
+                else
+                {
+                    $db->{'sth_update_delband'}->execute
+                        ($r->{'block_num'},$r->{'block_time'}, $cpu, $net, @arg);
+                }                
+            }
+            $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
+                
+            $db->{'dbh'}->commit();                     
         }
             
 
@@ -325,14 +346,8 @@ sub getdb
     $db->{'sth_fork_currency'} = $dbh->prepare
         ('DELETE FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num >= ? ');
 
-    $db->{'sth_fork_auth_thresholds'} = $dbh->prepare
-        ('DELETE FROM UPD_AUTH_THRESHOLDS WHERE network = ? AND block_num >= ? ');
-
-    $db->{'sth_fork_auth_keys'} = $dbh->prepare
-        ('DELETE FROM UPD_AUTH_KEYS WHERE network = ? AND block_num >= ? ');
-
-    $db->{'sth_fork_auth_acc'} = $dbh->prepare
-        ('DELETE FROM UPD_AUTH_ACC WHERE network = ? AND block_num >= ? ');
+    $db->{'sth_fork_auth'} = $dbh->prepare
+        ('DELETE FROM UPD_AUTH WHERE network = ? AND block_num >= ? ');
 
     $db->{'sth_fork_delband'} = $dbh->prepare
         ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num >= ? ');
@@ -341,20 +356,10 @@ sub getdb
         ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
 
 
-    $db->{'sth_upd_auth_thres'} = $dbh->prepare
-        ('INSERT INTO UPD_AUTH_THRESHOLDS ' . 
-         '(network, account_name, perm, threshold, block_num, block_time, deleted) ' .
+    $db->{'sth_upd_auth'} = $dbh->prepare
+        ('INSERT INTO UPD_AUTH ' . 
+         '(network, account_name, block_num, block_time, perm, jsdata, deleted) ' .
          'VALUES(?,?,?,?,?,?,?)');
-
-    $db->{'sth_upd_auth_keys'} = $dbh->prepare
-        ('INSERT INTO UPD_AUTH_KEYS ' . 
-         '(network, account_name, perm, pubkey, weight, block_num, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?)');
-
-    $db->{'sth_ins_auth_acc'} = $dbh->prepare
-        ('INSERT INTO UPD_AUTH_ACC ' . 
-         '(network, account_name, perm, actor, permission, weight, block_num, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?,?)');
 
     $db->{'sth_upd_delband'} = $dbh->prepare
         ('INSERT INTO UPD_DELBAND ' . 
@@ -368,16 +373,78 @@ sub getdb
     $db->{'sth_get_upd_currency'} = $dbh->prepare
         ('SELECT account_name, block_num, block_time, contract, currency, amount, decimals, deleted ' .
          'FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num <= ? ORDER BY id');
+        
+    $db->{'sth_erase_currency'} = $dbh->prepare
+        ('DELETE FROM CURRENCY_BAL WHERE ' .
+         'network=? and account_name=? and contract=? AND currency=?');
     
     $db->{'sth_save_currency'} = $dbh->prepare
         ('INSERT INTO CURRENCY_BAL ' .
          '(network, account_name, block_num, block_time, contract, currency, amount, decimals) ' .
          'VALUES(?,?,?,?,?,?,?,?)');
-    
-    $db->{'sth_erase_currency'} = $dbh->prepare
-        ('DELETE FROM CURRENCY_BAL WHERE ' .
-         'network=? and account_name=? and contract=?, currency=?');
-    
+
     $db->{'sth_del_upd_currency'} = $dbh->prepare
         ('DELETE FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num <= ?');
+
+
+
+    
+    $db->{'sth_get_upd_auth'} = $dbh->prepare
+        ('SELECT account_name, block_num, block_time, perm, jsdata, deleted ' .
+         'FROM UPD_AUTH WHERE network = ? AND block_num <= ? ORDER BY id');
+
+    $db->{'sth_erase_auth_thres'} = $dbh->prepare
+        ('DELETE FROM AUTH_THRESHOLDS WHERE ' .
+         'network=? AND account_name=? AND perm=?');
+
+    $db->{'sth_erase_auth_keys'} = $dbh->prepare
+        ('DELETE FROM AUTH_KEYS WHERE ' .
+         'network=? AND account_name=? AND perm=?');
+
+    $db->{'sth_erase_auth_acc'} = $dbh->prepare
+        ('DELETE FROM AUTH_ACC WHERE ' .
+         'network=? AND account_name=? AND perm=?');
+
+    $db->{'sth_save_auth_thres'} = $dbh->prepare
+        ('INSERT INTO AUTH_THRESHOLDS ' .
+         '(network, account_name, perm, threshold, block_num, block_time) ' .
+         'VALUES(?,?,?,?,?,?)');
+
+    $db->{'sth_save_auth_keys'} = $dbh->prepare
+        ('INSERT INTO AUTH_KEYS ' .
+         '(network, account_name, perm, pubkey, weight) ' .
+         'VALUES(?,?,?,?,?)');
+
+    $db->{'sth_save_auth_acc'} = $dbh->prepare
+        ('INSERT INTO AUTH_ACC ' .
+         '(network, account_name, perm, actor, permission, weight) ' .
+         'VALUES(?,?,?,?,?,?)');
+
+    $db->{'sth_del_upd_auth'} = $dbh->prepare
+        ('DELETE FROM UPD_AUTH WHERE network = ? AND block_num <= ?');
+
+
+
+    $db->{'sth_get_upd_delband'} = $dbh->prepare
+        ('SELECT account_name, block_num, block_time, del_from, cpu_weight, net_weight, deleted ' .
+         'FROM UPD_DELBAND WHERE network = ? AND block_num <= ? ORDER BY id');
+
+    $db->{'sth_get_current_delband'} = $dbh->prepare
+        ('SELECT cpu_weight, net_weight ' .
+         'FROM DELBAND WHERE network = ? AND account_name = ? AND del_from = ?');
+
+    $db->{'sth_erase_delband'} = $dbh->prepare
+        ('DELETE FROM DELBAND WHERE network = ? AND account_name = ? AND del_from = ?');
+    
+    $db->{'sth_insert_delband'} = $dbh->prepare
+        ('INSERT INTO DELBAND ' .
+         '(network, account_name, del_from, block_num, block_time, cpu_weight, net_weight) ' .
+         'VALUES(?,?,?,?,?,?,?)');
+
+    $db->{'sth_update_delband'} = $dbh->prepare
+        ('UPDATE DELBAND SET block_num=?, block_time=?, cpu_weight=?, net_weight=? ' .
+         'WHERE network = ? AND account_name = ? AND del_from = ?');
+
+    $db->{'sth_del_upd_delband'} = $dbh->prepare
+        ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num <= ?');    
 }

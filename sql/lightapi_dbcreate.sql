@@ -90,11 +90,11 @@ CREATE TABLE DELBAND
 (
  network           VARCHAR(15) NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
+ del_from          VARCHAR(13) NOT NULL,
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
- del_from          VARCHAR(13) NOT NULL,
- cpu_weight        DOUBLE PRECISION NOT NULL,
- net_weight        DOUBLE PRECISION NOT NULL
+ cpu_weight        BIGINT UNSIGNED NOT NULL,
+ net_weight        BIGINT UNSIGNED NOT NULL
 ) ENGINE=InnoDB;
 
 CREATE UNIQUE INDEX DELBAND_I01 ON DELBAND (network, account_name, del_from);
@@ -136,55 +136,22 @@ CREATE INDEX UPD_CURRENCY_BAL_I01 ON CURRENCY_BAL (network, block_num);
 CREATE INDEX UPD_CURRENCY_BAL_I02 ON CURRENCY_BAL (network, account_name);
 
 
-CREATE TABLE UPD_AUTH_THRESHOLDS
+CREATE TABLE UPD_AUTH
 (
  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
  network           VARCHAR(15) NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
- perm              VARCHAR(13) NOT NULL,
- threshold         INT NOT NULL,
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
- deleted           TINYINT NOT NULL
-) ENGINE=InnoDB;
-
-CREATE INDEX UPD_AUTH_THRESHOLDS_I01 ON UPD_AUTH_THRESHOLDS (network, block_num);
-CREATE INDEX UPD_AUTH_THRESHOLDS_I02 ON UPD_AUTH_THRESHOLDS (network, account_name);
-
-
-CREATE TABLE UPD_AUTH_KEYS
-(
- id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
- network           VARCHAR(15) NOT NULL,
- account_name      VARCHAR(13) NOT NULL,
  perm              VARCHAR(13) NOT NULL,
- pubkey            VARCHAR(256) NOT NULL,
- weight            INT NOT NULL,
- block_num         BIGINT NOT NULL,
+ jsdata            BLOB NOT NULL,
  deleted           TINYINT NOT NULL
 ) ENGINE=InnoDB;
 
-CREATE INDEX UPD_AUTH_KEYS_I01 ON UPD_AUTH_KEYS (network, block_num);
-CREATE INDEX UPD_AUTH_KEYS_I02 ON UPD_AUTH_KEYS (network, account_name);
+CREATE INDEX UPD_AUTH_I01 ON UPD_AUTH (network, block_num);
+CREATE INDEX UPD_AUTH_I02 ON UPD_AUTH (network, account_name);
 
 
-
-
-CREATE TABLE UPD_AUTH_ACC
-(
- id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
- network           VARCHAR(15) NOT NULL,
- account_name      VARCHAR(13) NOT NULL,
- perm              VARCHAR(13) NOT NULL,
- actor             VARCHAR(13) NOT NULL,
- permission        VARCHAR(13) NOT NULL,
- weight            INT NOT NULL,
- block_num         BIGINT NOT NULL,
- deleted           TINYINT NOT NULL
-) ENGINE=InnoDB;
-
-CREATE INDEX UPD_AUTH_ACC_I01 ON UPD_AUTH_ACC (network, block_num);
-CREATE INDEX UPD_AUTH_ACC_I02 ON UPD_AUTH_ACC (network, account_name);
 
 
 CREATE TABLE UPD_DELBAND
@@ -195,8 +162,8 @@ CREATE TABLE UPD_DELBAND
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
  del_from          VARCHAR(13) NOT NULL,
- cpu_weight        DOUBLE PRECISION NOT NULL,
- net_weight        DOUBLE PRECISION NOT NULL,
+ cpu_weight        BIGINT UNSIGNED NOT NULL,
+ net_weight        BIGINT UNSIGNED NOT NULL,
  deleted           TINYINT NOT NULL
 ) ENGINE=InnoDB;
 
