@@ -265,10 +265,11 @@ sub process_data
         my $block_num = $data->{'block_num'};
         my $block_time = $data->{'block_timestamp'};
         $block_time =~ s/T/ /;
-        $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $network);
-        $db->{'dbh'}->commit();
-        
         my $last_irreversible = $data->{'last_irreversible'};
+        
+        $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $last_irreversible, $network);
+        $db->{'dbh'}->commit();
+
         if( $last_irreversible > $irreversible )
         {
             ## currency balances
@@ -314,8 +315,8 @@ sub process_data
                     foreach my $accdata (@{$auth->{'accounts'}})
                     {
                         $db->{'sth_save_auth_acc'}->execute
-                        (@arg, $accdata->{'permission'}{'actor'},
-                         $accdata->{'permission'}{'permission'}, $accdata->{'weight'});
+                            (@arg, $accdata->{'permission'}{'actor'},
+                             $accdata->{'permission'}{'permission'}, $accdata->{'weight'});
                     }
                 }
             }
@@ -377,9 +378,9 @@ sub process_data
             }
             $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
             
-            $db->{'dbh'}->commit();                     
-        }
-            
+            $db->{'dbh'}->commit();
+            $irreversible = $last_irreversible;
+        }                   
 
         $unconfirmed_block = $block_num;
         if( $unconfirmed_block - $confirmed_block >= $ack_every )
@@ -446,7 +447,7 @@ sub getdb
 
     
     $db->{'sth_upd_sync_head'} = $dbh->prepare
-        ('UPDATE SYNC SET block_num=?, block_time=? WHERE network = ?');
+        ('UPDATE SYNC SET block_num=?, block_time=?, irreversible=? WHERE network = ?');
 
 
     
