@@ -5,6 +5,7 @@ use Getopt::Long;
 use DBI;
 use Net::WebSocket::Server;
 use Protocol::WebSocket::Frame;
+use Digest::SHA qw(sha256_hex);
 
 $Protocol::WebSocket::Frame::MAX_PAYLOAD_SIZE = 100*1024*1024;
 $Protocol::WebSocket::Frame::MAX_FRAGMENTS_AMOUNT = 102400;
@@ -133,6 +134,34 @@ sub process_data
         $unconfirmed_block = 0;
         return $block_num;
     }
+    elsif( $msgtype == 1007 ) # CHRONICLE_MSGTYPE_TBL_ROW
+    {
+        my $kvo = $data->{'kvo'};
+        if( $kvo->{'table'} eq 'accounts' and
+            defined($kvo->{'value'}{'balance'}) and
+            $kvo->{'scope'} =~ /^[a-z0-5.]+$/ )
+        {
+            my $bal = $kvo->{'value'}{'balance'};
+            if( $bal =~ /^([0-9.]+) ([A-Z]{1,7})$/ )
+            {
+                my $amount = $1;
+                my $currency = $2;
+                my $block_time = $data->{'block_timestamp'};
+                $block_time =~ s/T/ /;
+
+                my $decimals = 0;
+                my $pos = index($amount, '.');
+                if( $pos > -1 )
+                {
+                    $decimals = length($amount) - $pos - 1;
+                }
+
+                $db->{'sth_upd_currency'}->execute
+                    ($network, $kvo->{'scope'}, $data->{'block_num'}, $block_time,
+                     $kvo->{'code'}, $currency, $amount, $decimals, ($data->{'added'} eq 'true')?0:1);
+            }
+        }
+    }
     elsif( $msgtype == 1003 ) # CHRONICLE_MSGTYPE_TX_TRACE
     {
         my $trace = $data->{'trace'};
@@ -200,6 +229,21 @@ sub process_data
                                 ($network, $data->{'receiver'}, $block_num, $block_time,
                                  $data->{'from'}, $cpu*$presicion, $net*$presicion, 1);
                         }
+                        elsif( $aname eq 'setcode' )
+                        {
+                            my $hash = '';
+                            my $deleted = 1;
+                            
+                            if( length($data->{'code'}) > 0 )
+                            {
+                                $hash = sha256_hex(pack('H*', $data->{'code'}));
+                                $deleted = 0;
+                            }
+                            
+                            $db->{'sth_upd_codehash'}->execute
+                                ($network, $data->{'account'}, $block_num, $block_time,
+                                 $hash, $deleted);
+                        }
                     }
                 }
             }
@@ -237,7 +281,8 @@ sub process_data
                 {
                     $db->{'sth_save_currency'}->execute
                         ($network, map {$r->{$_}}
-                         qw(account_name block_num block_time contract currency amount decimals));
+                         qw(account_name block_num block_time contract currency amount decimals
+                            block_num block_time amount) );
                 }
             }
             $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
@@ -309,8 +354,26 @@ sub process_data
                         ($r->{'block_num'},$r->{'block_time'}, $cpu, $net, @arg);
                 }                
             }
-            $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
-                
+            $db->{'sth_del_upd_delband'}->execute($network, $last_irreversible);
+
+
+            ## setcode
+            $db->{'sth_get_upd_codehash'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_codehash'}->fetchrow_hashref('NAME_lc'))
+            {
+                if( $r->{'deleted'} )
+                {
+                    $db->{'sth_erase_codehash'}->execute($network, $r->{'account_name'});
+                }
+                else
+                {
+                    $db->{'sth_save_codehash'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(account_name block_num block_time code_hash block_num block_time code_hash));
+                }
+            }
+            $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
+            
             $db->{'dbh'}->commit();                     
         }
             
@@ -322,6 +385,7 @@ sub process_data
             return $confirmed_block;
         }
     }
+    return 0;
 }
     
     
@@ -356,6 +420,11 @@ sub getdb
         ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
 
 
+    $db->{'sth_upd_currency'} = $dbh->prepare
+        ('INSERT INTO UPD_CURRENCY_BAL ' . 
+         '(network, account_name, block_num, block_time, contract, currency, amount, decimals, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?)');
+
     $db->{'sth_upd_auth'} = $dbh->prepare
         ('INSERT INTO UPD_AUTH ' . 
          '(network, account_name, block_num, block_time, perm, jsdata, deleted) ' .
@@ -366,10 +435,18 @@ sub getdb
          '(network, account_name, block_num, block_time, del_from, cpu_weight, net_weight, deleted) ' .
          'VALUES(?,?,?,?,?,?,?,?)');
 
+    $db->{'sth_upd_codehash'} = $dbh->prepare
+        ('INSERT INTO UPD_CODEHASH ' . 
+         '(network, account_name, block_num, block_time, code_hash, deleted) ' .
+         'VALUES(?,?,?,?,?,?)');
+
+
+    
     $db->{'sth_upd_sync_head'} = $dbh->prepare
         ('UPDATE SYNC SET block_num=?, block_time=? WHERE network = ?');
 
 
+    
     $db->{'sth_get_upd_currency'} = $dbh->prepare
         ('SELECT account_name, block_num, block_time, contract, currency, amount, decimals, deleted ' .
          'FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num <= ? ORDER BY id');
@@ -381,7 +458,8 @@ sub getdb
     $db->{'sth_save_currency'} = $dbh->prepare
         ('INSERT INTO CURRENCY_BAL ' .
          '(network, account_name, block_num, block_time, contract, currency, amount, decimals) ' .
-         'VALUES(?,?,?,?,?,?,?,?)');
+         'VALUES(?,?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, amount=?');
 
     $db->{'sth_del_upd_currency'} = $dbh->prepare
         ('DELETE FROM UPD_CURRENCY_BAL WHERE network = ? AND block_num <= ?');
@@ -447,4 +525,23 @@ sub getdb
 
     $db->{'sth_del_upd_delband'} = $dbh->prepare
         ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num <= ?');    
+
+
+
+    $db->{'sth_get_upd_codehash'} = $dbh->prepare
+        ('SELECT account_name, block_num, block_time, code_hash, deleted ' .
+         'FROM UPD_CODEHASH WHERE network = ? AND block_num <= ? ORDER BY id');
+    
+    $db->{'sth_erase_codehash'} = $dbh->prepare
+        ('DELETE FROM CODEHASH WHERE ' .
+         'network=? and account_name=?');
+    
+    $db->{'sth_save_codehash'} = $dbh->prepare
+        ('INSERT INTO CODEHASH ' .
+         '(network, account_name, block_num, block_time, code_hash) ' .
+         'VALUES(?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, code_hash=?');
+
+    $db->{'sth_del_upd_codehash'} = $dbh->prepare
+        ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num <= ?');    
 }
