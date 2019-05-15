@@ -139,28 +139,46 @@ sub process_data
     elsif( $msgtype == 1007 ) # CHRONICLE_MSGTYPE_TBL_ROW
     {
         my $kvo = $data->{'kvo'};
-        if( $kvo->{'table'} eq 'accounts' and
-            defined($kvo->{'value'}{'balance'}) and
-            $kvo->{'scope'} =~ /^[a-z0-5.]+$/ )
+        if( ref($kvo->{'value'}) eq 'HASH' )
         {
-            my $bal = $kvo->{'value'}{'balance'};
-            if( $bal =~ /^([0-9.]+) ([A-Z]{1,7})$/ )
+            if( $kvo->{'table'} eq 'accounts' )
             {
-                my $amount = $1;
-                my $currency = $2;
+                if( defined($kvo->{'value'}{'balance'}) and
+                    $kvo->{'scope'} =~ /^[a-z0-5.]+$/ )
+                {
+                    my $bal = $kvo->{'value'}{'balance'};
+                    if( $bal =~ /^([0-9.]+) ([A-Z]{1,7})$/ )
+                    {
+                        my $amount = $1;
+                        my $currency = $2;
+                        my $block_time = $data->{'block_timestamp'};
+                        $block_time =~ s/T/ /;
+                        
+                        my $decimals = 0;
+                        my $pos = index($amount, '.');
+                        if( $pos > -1 )
+                        {
+                            $decimals = length($amount) - $pos - 1;
+                        }
+                        
+                        $db->{'sth_upd_currency'}->execute
+                            ($network, $kvo->{'scope'}, $data->{'block_num'}, $block_time,
+                             $kvo->{'code'}, $currency, $amount, $decimals,
+                             ($data->{'added'} eq 'true')?0:1);
+                    }
+                }
+            }
+            elsif( $kvo->{'code'} eq 'eosio' and $kvo->{'table'} eq 'delband' )
+            {
+                my ($cpu, $curr1) = split(/\s/, $kvo->{'value'}{'cpu_weight'});
+                my ($net, $curr2) = split(/\s/, $kvo->{'value'}{'net_weight'});
                 my $block_time = $data->{'block_timestamp'};
                 $block_time =~ s/T/ /;
-
-                my $decimals = 0;
-                my $pos = index($amount, '.');
-                if( $pos > -1 )
-                {
-                    $decimals = length($amount) - $pos - 1;
-                }
-
-                $db->{'sth_upd_currency'}->execute
-                    ($network, $kvo->{'scope'}, $data->{'block_num'}, $block_time,
-                     $kvo->{'code'}, $currency, $amount, $decimals, ($data->{'added'} eq 'true')?0:1);
+                
+                $db->{'sth_upd_delband'}->execute
+                    ($network, $kvo->{'value'}{'to'}, $data->{'block_num'}, $block_time,
+                     $kvo->{'value'}{'from'}, $cpu*$presicion, $net*$presicion,
+                     ($data->{'added'} eq 'true')?0:1);
             }
         }
     }
@@ -213,24 +231,6 @@ sub process_data
                                 ($network, $data->{'account'}, $block_num, $block_time,
                                  $data->{'permission'}, '{}', 1);
                         }
-                        elsif( $aname eq 'delegatebw' )
-                        {
-                            my ($cpu, $curr1) = split(/\s/, $data->{'stake_cpu_quantity'});
-                            my ($net, $curr2) = split(/\s/, $data->{'stake_net_quantity'});
-                            
-                            $db->{'sth_upd_delband'}->execute
-                                ($network, $data->{'receiver'}, $block_num, $block_time,
-                                 $data->{'from'}, $cpu*$presicion, $net*$presicion, 0);
-                        }
-                        elsif( $aname eq 'undelegatebw' )
-                        {
-                            my ($cpu, $curr1) = split(/\s/, $data->{'unstake_cpu_quantity'});
-                            my ($net, $curr2) = split(/\s/, $data->{'unstake_net_quantity'});
-                            
-                            $db->{'sth_upd_delband'}->execute
-                                ($network, $data->{'receiver'}, $block_num, $block_time,
-                                 $data->{'from'}, $cpu*$presicion, $net*$presicion, 1);
-                        }
                         elsif( $aname eq 'setcode' )
                         {
                             my $hash = '';
@@ -270,7 +270,7 @@ sub process_data
         $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $last_irreversible, $network);
         $db->{'dbh'}->commit();
 
-        if( $last_irreversible > $irreversible )
+        if( $block_num <= $last_irreversible or $last_irreversible > $irreversible )
         {
             ## currency balances
             $db->{'sth_get_upd_currency'}->execute($network, $last_irreversible);
@@ -327,36 +327,18 @@ sub process_data
             $db->{'sth_get_upd_delband'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_delband'}->fetchrow_hashref('NAME_lc'))
             {
-                my @arg = ($network, $r->{'account_name'}, $r->{'del_from'});
-                my $cpu = 0;
-                my $net = 0;
-                my $isnew = 1;
-                $db->{'sth_get_current_delband'}->execute(@arg);
-                my $res = $db->{'sth_get_current_delband'}->fetchall_arrayref();
-                if( scalar(@{$res}) > 0 )
+                if( $r->{'deleted'} )
                 {
-                    $cpu = $res->[0][0];
-                    $net = $res->[0][1];
-                    $isnew = 0;
-                }
-
-                my $mult = $r->{'deleted'}?-1:1;
-                $cpu += $r->{'cpu_weight'} * $mult;
-                $net += $r->{'net_weight'} * $mult;
-                if( $cpu == 0 and $net == 0 )
-                {
-                    $db->{'sth_erase_delband'}->execute(@arg);
-                }
-                elsif( $isnew )
-                {
-                    $db->{'sth_insert_delband'}->execute
-                        (@arg, $r->{'block_num'},$r->{'block_time'}, $cpu, $net);
+                    $db->{'sth_erase_delband'}->execute
+                        ($network, $r->{'account_name'}, $r->{'del_from'});
                 }
                 else
                 {
-                    $db->{'sth_update_delband'}->execute
-                        ($r->{'block_num'},$r->{'block_time'}, $cpu, $net, @arg);
-                }                
+                    $db->{'sth_save_delband'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(account_name del_from block_num block_time cpu_weight net_weight
+                            block_num block_time cpu_weight net_weight));
+                }
             }
             $db->{'sth_del_upd_delband'}->execute($network, $last_irreversible);
 
@@ -511,21 +493,14 @@ sub getdb
         ('SELECT account_name, block_num, block_time, del_from, cpu_weight, net_weight, deleted ' .
          'FROM UPD_DELBAND WHERE network = ? AND block_num <= ? ORDER BY id');
 
-    $db->{'sth_get_current_delband'} = $dbh->prepare
-        ('SELECT cpu_weight, net_weight ' .
-         'FROM DELBAND WHERE network = ? AND account_name = ? AND del_from = ?');
-
     $db->{'sth_erase_delband'} = $dbh->prepare
         ('DELETE FROM DELBAND WHERE network = ? AND account_name = ? AND del_from = ?');
     
-    $db->{'sth_insert_delband'} = $dbh->prepare
+    $db->{'sth_save_delband'} = $dbh->prepare
         ('INSERT INTO DELBAND ' .
          '(network, account_name, del_from, block_num, block_time, cpu_weight, net_weight) ' .
-         'VALUES(?,?,?,?,?,?,?)');
-
-    $db->{'sth_update_delband'} = $dbh->prepare
-        ('UPDATE DELBAND SET block_num=?, block_time=?, cpu_weight=?, net_weight=? ' .
-         'WHERE network = ? AND account_name = ? AND del_from = ?');
+         'VALUES(?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, cpu_weight=?, net_weight=?');
 
     $db->{'sth_del_upd_delband'} = $dbh->prepare
         ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num <= ?');    
