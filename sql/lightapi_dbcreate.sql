@@ -128,6 +128,21 @@ CREATE UNIQUE INDEX CODEHASH_I01 ON CODEHASH (network, account_name);
 CREATE INDEX CODEHASH_I02 ON CODEHASH (network, code_hash);
 
 
+CREATE TABLE USERRES
+(
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ cpu_weight        BIGINT UNSIGNED NOT NULL,
+ net_weight        BIGINT UNSIGNED NOT NULL,
+ ram_bytes         BIGINT UNSIGNED NOT NULL
+) ENGINE=InnoDB;
+
+CREATE UNIQUE INDEX USERRES_I01 ON USERRES (network, account_name);
+CREATE INDEX USERRES_I02 ON USERRES (network, ram_bytes);
+
+
 
 
 /* ------ Queues of updates before they become irreversible ------ */
@@ -217,3 +232,20 @@ CREATE TABLE UPD_CODEHASH
 
 CREATE INDEX UPD_CODEHASH_I01 ON UPD_CODEHASH (network, block_num);
 CREATE INDEX UPD_CODEHASH_I02 ON UPD_CODEHASH (network, account_name);
+
+
+CREATE TABLE UPD_USERRES
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ cpu_weight        BIGINT UNSIGNED NOT NULL,
+ net_weight        BIGINT UNSIGNED NOT NULL,
+ ram_bytes         BIGINT UNSIGNED NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_USERRES_I01 ON UPD_USERRES (network, block_num);
+CREATE INDEX UPD_USERRES_I02 ON UPD_USERRES (network, account_name);

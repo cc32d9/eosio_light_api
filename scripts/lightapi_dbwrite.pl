@@ -132,6 +132,7 @@ sub process_data
         $db->{'sth_fork_linkauth'}->execute($network, $block_num);
         $db->{'sth_fork_delband'}->execute($network, $block_num);
         $db->{'sth_fork_codehash'}->execute($network, $block_num);
+        $db->{'sth_fork_userres'}->execute($network, $block_num);
         $db->{'dbh'}->commit();
         $confirmed_block = $block_num;
         $unconfirmed_block = 0;
@@ -169,17 +170,32 @@ sub process_data
                     }
                 }
             }
-            elsif( $kvo->{'code'} eq 'eosio' and $kvo->{'table'} eq 'delband' )
+            elsif( $kvo->{'code'} eq 'eosio' )
             {
-                my ($cpu, $curr1) = split(/\s/, $kvo->{'value'}{'cpu_weight'});
-                my ($net, $curr2) = split(/\s/, $kvo->{'value'}{'net_weight'});
-                my $block_time = $data->{'block_timestamp'};
-                $block_time =~ s/T/ /;
-                
-                $db->{'sth_upd_delband'}->execute
-                    ($network, $kvo->{'value'}{'to'}, $data->{'block_num'}, $block_time,
-                     $kvo->{'value'}{'from'}, $cpu*$presicion, $net*$presicion,
-                     ($data->{'added'} eq 'true')?0:1);
+                if( $kvo->{'table'} eq 'delband' )
+                {
+                    my ($cpu, $curr1) = split(/\s/, $kvo->{'value'}{'cpu_weight'});
+                    my ($net, $curr2) = split(/\s/, $kvo->{'value'}{'net_weight'});
+                    my $block_time = $data->{'block_timestamp'};
+                    $block_time =~ s/T/ /;
+                    
+                    $db->{'sth_upd_delband'}->execute
+                        ($network, $kvo->{'value'}{'to'}, $data->{'block_num'}, $block_time,
+                         $kvo->{'value'}{'from'}, $cpu*$presicion, $net*$presicion,
+                         ($data->{'added'} eq 'true')?0:1);
+                }
+                elsif( $kvo->{'table'} eq 'userres' )
+                {
+                    my ($cpu, $curr1) = split(/\s/, $kvo->{'value'}{'cpu_weight'});
+                    my ($net, $curr2) = split(/\s/, $kvo->{'value'}{'net_weight'});
+                    my $block_time = $data->{'block_timestamp'};
+                    $block_time =~ s/T/ /;
+                    
+                    $db->{'sth_upd_userres'}->execute
+                        ($network, $kvo->{'value'}{'owner'}, $data->{'block_num'}, $block_time,
+                         $cpu*$presicion, $net*$presicion, $kvo->{'value'}{'ram_bytes'},
+                         ($data->{'added'} eq 'true')?0:1);
+                }
             }
         }
     }
@@ -279,6 +295,11 @@ sub process_data
         my $block_time = $data->{'block_timestamp'};
         $block_time =~ s/T/ /;
         my $last_irreversible = $data->{'last_irreversible'};
+
+        if( $block_num > $unconfirmed_block+1 )
+        {
+            printf STDERR ("WARNING: missing blocks %d to %d\n", $unconfirmed_block+1, $block_num-1);
+        }                           
         
         $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $last_irreversible, $network);
 
@@ -392,6 +413,24 @@ sub process_data
             }
             $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
             
+            ## userres
+            $db->{'sth_get_upd_userres'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_userres'}->fetchrow_hashref('NAME_lc'))
+            {
+                if( $r->{'deleted'} )
+                {
+                    $db->{'sth_erase_userres'}->execute($network, $r->{'account_name'});
+                }
+                else
+                {
+                    $db->{'sth_save_userres'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(account_name block_num block_time cpu_weight net_weight ram_bytes
+                            block_num block_time cpu_weight net_weight ram_bytes));
+                }
+            }
+            $db->{'sth_del_upd_userres'}->execute($network, $last_irreversible);
+
             $irreversible = $last_irreversible;
         }                   
 
@@ -441,7 +480,10 @@ sub getdb
     $db->{'sth_fork_codehash'} = $dbh->prepare
         ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
 
+    $db->{'sth_fork_userres'} = $dbh->prepare
+        ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
 
+    
     $db->{'sth_upd_currency'} = $dbh->prepare
         ('INSERT INTO UPD_CURRENCY_BAL ' . 
          '(network, account_name, block_num, block_time, contract, currency, amount, decimals, deleted) ' .
@@ -467,6 +509,11 @@ sub getdb
          '(network, account_name, code, type, requirement, block_num, block_time, deleted) ' .
          'VALUES(?,?,?,?,?,?,?,?)');
     
+    $db->{'sth_upd_userres'} = $dbh->prepare
+        ('INSERT INTO UPD_USERRES ' . 
+         '(network, account_name, block_num, block_time, cpu_weight, net_weight, ram_bytes, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?)');
+
     
     $db->{'sth_upd_sync_head'} = $dbh->prepare
         ('UPDATE SYNC SET block_num=?, block_time=?, irreversible=? WHERE network = ?');
@@ -582,4 +629,22 @@ sub getdb
 
     $db->{'sth_del_upd_codehash'} = $dbh->prepare
         ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num <= ?');    
+
+
+    
+    $db->{'sth_get_upd_userres'} = $dbh->prepare
+        ('SELECT account_name, block_num, block_time, cpu_weight, net_weight, ram_bytes, deleted ' .
+         'FROM UPD_USERRES WHERE network = ? AND block_num <= ? ORDER BY id');
+
+    $db->{'sth_erase_userres'} = $dbh->prepare
+        ('DELETE FROM USERRES WHERE network = ? AND account_name = ?');
+    
+    $db->{'sth_save_userres'} = $dbh->prepare
+        ('INSERT INTO USERRES ' .
+         '(network, account_name, block_num, block_time, cpu_weight, net_weight, ram_bytes) ' .
+         'VALUES(?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, cpu_weight=?, net_weight=?, ram_bytes=?');
+
+    $db->{'sth_del_upd_userres'} = $dbh->prepare
+        ('DELETE FROM UPD_USERRES WHERE network = ? AND block_num <= ?');    
 }
