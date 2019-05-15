@@ -135,7 +135,7 @@ sub process_data
         $db->{'sth_fork_userres'}->execute($network, $block_num);
         $db->{'dbh'}->commit();
         $confirmed_block = $block_num;
-        $unconfirmed_block = 0;
+        $unconfirmed_block = $block_num;
         return $block_num;
     }
     elsif( $msgtype == 1007 ) # CHRONICLE_MSGTYPE_TBL_ROW
