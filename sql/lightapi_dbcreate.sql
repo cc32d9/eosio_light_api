@@ -86,6 +86,21 @@ CREATE UNIQUE INDEX AUTH_ACC_I01 ON AUTH_ACC (network, account_name, perm, actor
 CREATE INDEX AUTH_ACC_I02 ON AUTH_ACC (network, actor);
 
 
+
+CREATE TABLE LINKAUTH
+(
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ code              VARCHAR(13) NOT NULL,
+ type              VARCHAR(13) NOT NULL,
+ requirement       VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL
+) ENGINE=InnoDB;
+
+CREATE UNIQUE INDEX LINKAUTH_I01 ON LINKAUTH (network, account_name, code, type);
+
+
 CREATE TABLE DELBAND
 (
  network           VARCHAR(15) NOT NULL,
@@ -151,6 +166,22 @@ CREATE TABLE UPD_AUTH
 CREATE INDEX UPD_AUTH_I01 ON UPD_AUTH (network, block_num);
 CREATE INDEX UPD_AUTH_I02 ON UPD_AUTH (network, account_name);
 
+
+CREATE TABLE UPD_LINKAUTH
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ code              VARCHAR(13) NOT NULL,
+ type              VARCHAR(13) NOT NULL,
+ requirement       VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_LINKAUTH_I01 ON UPD_LINKAUTH (network, block_num);
+CREATE INDEX UPD_LINKAUTH_I02 ON UPD_LINKAUTH (network, account_name);
 
 
 

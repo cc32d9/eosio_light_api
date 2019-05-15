@@ -129,6 +129,7 @@ sub process_data
         $db->{'sth_fork_sync'}->execute($block_num, $network);
         $db->{'sth_fork_currency'}->execute($network, $block_num);
         $db->{'sth_fork_auth'}->execute($network, $block_num);
+        $db->{'sth_fork_linkauth'}->execute($network, $block_num);
         $db->{'sth_fork_delband'}->execute($network, $block_num);
         $db->{'sth_fork_codehash'}->execute($network, $block_num);
         $db->{'dbh'}->commit();
@@ -246,6 +247,18 @@ sub process_data
                                 ($network, $data->{'account'}, $block_num, $block_time,
                                  $hash, $deleted);
                         }
+                        elsif( $aname eq 'linkauth' )
+                        {
+                            $db->{'sth_upd_linkauth'}->execute
+                                ($network, map {$data->{$_}} qw(account code type requirement),
+                                 $block_num, $block_time, 0);
+                        }
+                        elsif( $aname eq 'unlinkauth' )
+                        {
+                            $db->{'sth_upd_linkauth'}->execute
+                                ($network, map {$data->{$_}} qw(account code type), '',
+                                 $block_num, $block_time, 1);
+                        }
                     }
                 }
             }
@@ -268,7 +281,6 @@ sub process_data
         my $last_irreversible = $data->{'last_irreversible'};
         
         $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $last_irreversible, $network);
-        $db->{'dbh'}->commit();
 
         if( $block_num <= $last_irreversible or $last_irreversible > $irreversible )
         {
@@ -323,6 +335,26 @@ sub process_data
             $db->{'sth_del_upd_auth'}->execute($network, $last_irreversible);
 
 
+            ## linkauth
+            $db->{'sth_get_upd_linkauth'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_linkauth'}->fetchrow_hashref('NAME_lc'))
+            {
+                if( $r->{'deleted'} )
+                {
+                    $db->{'sth_erase_linkauth'}->execute
+                        ($network, map {$r->{$_}} qw(account_name code type));
+                }
+                else
+                {
+                    $db->{'sth_save_linkauth'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(account_name code type requirement block_num block_time
+                            requirement block_num block_time));
+                }
+            }
+            $db->{'sth_del_upd_linkauth'}->execute($network, $last_irreversible);
+            
+            
             ## delegated bandwidth
             $db->{'sth_get_upd_delband'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_delband'}->fetchrow_hashref('NAME_lc'))
@@ -360,10 +392,11 @@ sub process_data
             }
             $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
             
-            $db->{'dbh'}->commit();
             $irreversible = $last_irreversible;
         }                   
 
+        $db->{'dbh'}->commit();
+        
         $unconfirmed_block = $block_num;
         if( $unconfirmed_block - $confirmed_block >= $ack_every )
         {
@@ -399,6 +432,9 @@ sub getdb
     $db->{'sth_fork_auth'} = $dbh->prepare
         ('DELETE FROM UPD_AUTH WHERE network = ? AND block_num >= ? ');
 
+    $db->{'sth_fork_linkauth'} = $dbh->prepare
+        ('DELETE FROM UPD_LINKAUTH WHERE network = ? AND block_num >= ? ');
+    
     $db->{'sth_fork_delband'} = $dbh->prepare
         ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num >= ? ');
 
@@ -426,7 +462,11 @@ sub getdb
          '(network, account_name, block_num, block_time, code_hash, deleted) ' .
          'VALUES(?,?,?,?,?,?)');
 
-
+    $db->{'sth_upd_linkauth'} = $dbh->prepare
+        ('INSERT INTO UPD_LINKAUTH ' . 
+         '(network, account_name, code, type, requirement, block_num, block_time, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?)');
+    
     
     $db->{'sth_upd_sync_head'} = $dbh->prepare
         ('UPDATE SYNC SET block_num=?, block_time=?, irreversible=? WHERE network = ?');
@@ -488,7 +528,26 @@ sub getdb
         ('DELETE FROM UPD_AUTH WHERE network = ? AND block_num <= ?');
 
 
+    
+    $db->{'sth_get_upd_linkauth'} = $dbh->prepare
+        ('SELECT account_name, code, type, requirement, block_num, block_time, deleted ' .
+         'FROM UPD_LINKAUTH WHERE network = ? AND block_num <= ? ORDER BY id');
 
+    $db->{'sth_erase_linkauth'} = $dbh->prepare
+        ('DELETE FROM LINKAUTH WHERE ' .
+         'network=? AND account_name=? AND code=? AND type=?');
+
+    $db->{'sth_save_linkauth'} = $dbh->prepare
+        ('INSERT INTO LINKAUTH ' .
+         '(network, account_name, code, type, requirement, block_num, block_time) ' .
+         'VALUES(?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE requirement=?, block_num=?, block_time=?');
+
+    $db->{'sth_del_upd_linkauth'} = $dbh->prepare
+        ('DELETE FROM UPD_LINKAUTH WHERE network = ? AND block_num <= ?');
+    
+
+    
     $db->{'sth_get_upd_delband'} = $dbh->prepare
         ('SELECT account_name, block_num, block_time, del_from, cpu_weight, net_weight, deleted ' .
          'FROM UPD_DELBAND WHERE network = ? AND block_num <= ? ORDER BY id');
