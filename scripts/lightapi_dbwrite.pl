@@ -250,13 +250,13 @@ sub process_data
                         elsif( $aname eq 'linkauth' )
                         {
                             $db->{'sth_upd_linkauth'}->execute
-                                ($network, map {$data->{$_}} qw(account code type requirement),
+                                ($network, map({$data->{$_}} qw(account code type requirement)),
                                  $block_num, $block_time, 0);
                         }
                         elsif( $aname eq 'unlinkauth' )
                         {
                             $db->{'sth_upd_linkauth'}->execute
-                                ($network, map {$data->{$_}} qw(account code type), '',
+                                ($network, map({$data->{$_}} qw(account code type)), '',
                                  $block_num, $block_time, 1);
                         }
                     }
