@@ -307,9 +307,11 @@ sub process_data
         if( $block_num <= $last_irreversible or $last_irreversible > $irreversible )
         {
             ## currency balances
+            my $changes = 0;
             $db->{'sth_get_upd_currency'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_currency'}->fetchrow_hashref('NAME_lc'))
             {
+                $changes = 1;
                 if( $r->{'deleted'} )
                 {
                     $db->{'sth_erase_currency'}->execute
@@ -323,13 +325,20 @@ sub process_data
                             block_num block_time amount) );
                 }
             }
-            $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
-            $db->{'dbh'}->commit();
+            
+            if( $changes )
+            {
+                $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
 
+            
             ## authorization
+            $changes = 0;
             $db->{'sth_get_upd_auth'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_auth'}->fetchrow_hashref('NAME_lc'))
             {
+                $changes = 1;
                 my @arg = ($network, $r->{'account_name'}, $r->{'perm'});
                 $db->{'sth_erase_auth_thres'}->execute(@arg);
                 $db->{'sth_erase_auth_keys'}->execute(@arg);
@@ -355,14 +364,20 @@ sub process_data
                     }
                 }
             }
-            $db->{'sth_del_upd_auth'}->execute($network, $last_irreversible);
-            $db->{'dbh'}->commit();
+
+            if( $changes )
+            {
+                $db->{'sth_del_upd_auth'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
 
 
             ## linkauth
+            $changes = 0;
             $db->{'sth_get_upd_linkauth'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_linkauth'}->fetchrow_hashref('NAME_lc'))
             {
+                $changes = 1;
                 if( $r->{'deleted'} )
                 {
                     $db->{'sth_erase_linkauth'}->execute
@@ -376,14 +391,20 @@ sub process_data
                             requirement block_num block_time));
                 }
             }
-            $db->{'sth_del_upd_linkauth'}->execute($network, $last_irreversible);
-            $db->{'dbh'}->commit();
+
+            if( $changes )
+            {
+                $db->{'sth_del_upd_linkauth'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
             
             
             ## delegated bandwidth
+            $changes = 0;
             $db->{'sth_get_upd_delband'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_delband'}->fetchrow_hashref('NAME_lc'))
             {
+                $changes = 1;
                 if( $r->{'deleted'} )
                 {
                     $db->{'sth_erase_delband'}->execute
@@ -397,14 +418,20 @@ sub process_data
                             block_num block_time cpu_weight net_weight));
                 }
             }
-            $db->{'sth_del_upd_delband'}->execute($network, $last_irreversible);
-            $db->{'dbh'}->commit();
+
+            if( $changes )
+            {
+                $db->{'sth_del_upd_delband'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
 
 
             ## setcode
+            $changes = 0;
             $db->{'sth_get_upd_codehash'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_codehash'}->fetchrow_hashref('NAME_lc'))
             {
+                $changes = 1;
                 if( $r->{'deleted'} )
                 {
                     $db->{'sth_erase_codehash'}->execute($network, $r->{'account_name'});
@@ -416,13 +443,19 @@ sub process_data
                          qw(account_name block_num block_time code_hash block_num block_time code_hash));
                 }
             }
-            $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
-            $db->{'dbh'}->commit();
+            
+            if( $changes )
+            {
+                $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
             
             ## userres
+            $changes = 0;
             $db->{'sth_get_upd_userres'}->execute($network, $last_irreversible);
             while(my $r = $db->{'sth_get_upd_userres'}->fetchrow_hashref('NAME_lc'))
             {
+                $changes = 1;
                 if( $r->{'deleted'} )
                 {
                     $db->{'sth_erase_userres'}->execute($network, $r->{'account_name'});
@@ -435,8 +468,12 @@ sub process_data
                             block_num block_time cpu_weight net_weight ram_bytes));
                 }
             }
-            $db->{'sth_del_upd_userres'}->execute($network, $last_irreversible);
-            $db->{'dbh'}->commit();
+
+            if( $changes )
+            {
+                $db->{'sth_del_upd_userres'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
 
             $irreversible = $last_irreversible;
         }                   
