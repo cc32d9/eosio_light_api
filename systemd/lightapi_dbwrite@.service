@@ -10,7 +10,7 @@ Description=lightapi DB Writer
 
 [Service]
 Type=simple
-Environment="LIGHTAPI_HOME=/opt/eos_zmq_light_api"
+Environment="LIGHTAPI_HOME=/opt/eosio_light_api"
 EnvironmentFile=/etc/default/lightapi_%i
 
 ExecStart=/usr/bin/perl ${LIGHTAPI_HOME}/scripts/lightapi_dbwrite.pl --network=%i $DBWRITE_OPTS
