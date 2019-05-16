@@ -53,12 +53,12 @@ following links:
 ## Installation
 
 ```
-sudo apt-get install git make cpanminus gcc g++ libzmq5-dev mariadb-server \
+sudo apt-get install git make cpanminus gcc g++ mariadb-server \
 libmysqlclient-dev libdbi-perl libjson-xs-perl libjson-perl
 
 sudo cpanm DBD::MariaDB
-sudo cpanm ZMQ::Raw
 sudo cpanm Starman
+sudo cpanm Net::WebSocket::Server
 
 cd /opt
 git clone https://github.com/cc32d9/eos_zmq_light_api.git
@@ -69,13 +69,13 @@ sh setup/add_eos_mainnet.sh
 
 vi /etc/default/lightapi_eos
 # add the ZMQ socket details:
-# DBWRITE_OPTS=--pull=tcp://127.0.0.1:5556
+# DBWRITE_OPTS=--port=8100
 
 # Optionally, edit /etc/default/lightapi_api and adjust variables
 # that are predefined in systemd/lightapi_api.service
 
 cd systemd
-sh install_systemd_dbwrite.sh
+sh install_systemd_dbwrite.sh eos
 sh install_systemd_api.sh
 
 # Now Starman is serving HTTP requests and you can build your HTTP service
