@@ -302,6 +302,7 @@ sub process_data
         }                           
         
         $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $last_irreversible, $network);
+        $db->{'dbh'}->commit();
 
         if( $block_num <= $last_irreversible or $last_irreversible > $irreversible )
         {
@@ -323,6 +324,7 @@ sub process_data
                 }
             }
             $db->{'sth_del_upd_currency'}->execute($network, $last_irreversible);
+            $db->{'dbh'}->commit();
 
             ## authorization
             $db->{'sth_get_upd_auth'}->execute($network, $last_irreversible);
@@ -354,6 +356,7 @@ sub process_data
                 }
             }
             $db->{'sth_del_upd_auth'}->execute($network, $last_irreversible);
+            $db->{'dbh'}->commit();
 
 
             ## linkauth
@@ -374,6 +377,7 @@ sub process_data
                 }
             }
             $db->{'sth_del_upd_linkauth'}->execute($network, $last_irreversible);
+            $db->{'dbh'}->commit();
             
             
             ## delegated bandwidth
@@ -394,6 +398,7 @@ sub process_data
                 }
             }
             $db->{'sth_del_upd_delband'}->execute($network, $last_irreversible);
+            $db->{'dbh'}->commit();
 
 
             ## setcode
@@ -412,6 +417,7 @@ sub process_data
                 }
             }
             $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
+            $db->{'dbh'}->commit();
             
             ## userres
             $db->{'sth_get_upd_userres'}->execute($network, $last_irreversible);
@@ -430,11 +436,10 @@ sub process_data
                 }
             }
             $db->{'sth_del_upd_userres'}->execute($network, $last_irreversible);
+            $db->{'dbh'}->commit();
 
             $irreversible = $last_irreversible;
         }                   
-
-        $db->{'dbh'}->commit();
         
         $unconfirmed_block = $block_num;
         if( $unconfirmed_block - $confirmed_block >= $ack_every )
