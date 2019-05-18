@@ -2,6 +2,8 @@ use strict;
 use warnings;
 use JSON;
 use DBI;
+use Math::BigInt;
+use Crypt::Digest::RIPEMD160 qw(ripemd160 ripemd160_hex);
 use Plack::Builder;
 use Plack::Request;
 
@@ -112,6 +114,95 @@ sub get_network
     return $r->[0];
 }
 
+# stolen from Bitcoin::Crypto::Base58;
+
+my @alphabet = qw(
+    1 2 3 4 5 6 7 8 9
+    A B C D E F G H J K L M N P Q R S T U V W X Y Z
+    a b c d e f g h i j k m n o p q r s t u v w x y z
+);
+ 
+my %alphabet_mapped;
+ 
+{
+    my $i;
+    for ($i = 0; $i < @alphabet; ++$i) {
+        $alphabet_mapped{$alphabet[$i]} = $i;
+    }
+}
+
+sub encode_base58
+{
+    my ($bytes) = @_;
+    my $number = Math::BigInt->from_hex("0x" . unpack "H*", $bytes);
+    my $result = "";
+    my $size = scalar @alphabet;
+    while ($number->is_pos()) {
+        my $copy = $number->copy();
+        $result = $alphabet[$copy->bmod($size)] . $result;
+        $number->bdiv($size);
+    }
+    return $result;
+}
+
+sub decode_base58
+{
+    my ($base58encoded) = @_;
+    my $result = Math::BigInt->new(0);
+    my @arr = split "", $base58encoded;
+    while (@arr > 0) {
+        my $current = $alphabet_mapped{shift @arr};
+        return undef unless defined $current;
+        my $step = Math::BigInt->new(scalar @alphabet)->bpow(scalar @arr)->bmul($current);
+        $result->badd($step);
+    }
+    return pack "H*", pad_hex($result->as_hex());
+}
+
+sub pad_hex
+{
+    my ($hex) = @_;
+    $hex =~ s/^0x//;
+    return "0" x (length($hex) % 2) . $hex;
+}
+
+sub from_legacy_key
+{
+    my $pubkey = shift;
+    if( substr($pubkey, 0, 3) eq 'EOS' )
+    {
+        my $whole = decode_base58(substr($pubkey,3));
+        my ($key, $checksum) = unpack('a[33]a[4]', $whole);
+        if( substr(ripemd160_hex($key), 0, 8) ne unpack('H*', $checksum) )
+        {
+            return '##INVALID_KEY##';
+        }
+
+        return 'PUB_K1_' .
+            encode_base58(pack('a[33]a[4]', $key, ripemd160(pack('a[33]a[2]', $key, 'K1'))));
+    }
+    return $pubkey;
+}
+
+
+sub to_legacy_key
+{
+    my $pubkey = shift;
+    if( substr($pubkey, 0, 7) eq 'PUB_K1_' )
+    {
+        my $whole = decode_base58(substr($pubkey,7));
+        my ($key, $checksum) = unpack('a[33]a[4]', $whole);
+        if( substr(ripemd160_hex(pack('a[33]a[2]', $key, 'K1')), 0, 8) ne unpack('H*', $checksum) )
+        {
+            return '##INVALID_KEY##';
+        }
+
+        return 'EOS' . encode_base58(pack('a[33]a[4]', $key, ripemd160($key)));
+    }
+    return $pubkey;
+}
+        
+
 sub get_permissions
 {
     my $network = shift;
@@ -122,6 +213,12 @@ sub get_permissions
     foreach my $permission (@{$perms}) {
         $sth_keys->execute($network, $acc, $permission->{'perm'});
         $permission->{'auth'}{'keys'} = $sth_keys->fetchall_arrayref({});
+        foreach my $row (@{$permission->{'auth'}{'keys'}})
+        {
+            my $newformat = $row->{'pubkey'};
+            $row->{'pubkey'} = to_legacy_key($newformat);
+            $row->{'public_key'} = $newformat;
+        }
         
         $sth_authacc->execute($network, $acc, $permission->{'perm'});
         $permission->{'auth'}{'accounts'} = $sth_authacc->fetchall_arrayref({});
@@ -309,7 +406,7 @@ $builder->mount
              return $res->finalize;
          }
 
-         my $key = $1;
+         my $key = from_legacy_key($1);
          check_dbserver();
 
          $sth_searchkey->execute($key);

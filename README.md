@@ -59,6 +59,7 @@ libmysqlclient-dev libdbi-perl libjson-xs-perl libjson-perl
 sudo cpanm DBD::MariaDB
 sudo cpanm Starman
 sudo cpanm Net::WebSocket::Server
+sudo cpanm Crypt::Digest::RIPEMD160;
 
 cd /opt
 git clone https://github.com/cc32d9/eos_zmq_light_api.git
