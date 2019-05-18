@@ -35,64 +35,64 @@ sub check_dbserver
 
         $sth_allnetworks = $dbh->prepare
             ('SELECT network, chainid, description, systoken, decimals, production ' .
-             'FROM LIGHTAPI_NETWORKS');
+             'FROM NETWORKS');
 
         $sth_getnet = $dbh->prepare
             ('SELECT network, chainid, description, systoken, decimals, production ' .
-             'FROM LIGHTAPI_NETWORKS WHERE network=?');
+             'FROM NETWORKS WHERE network=?');
 
         $sth_res = $dbh->prepare
-            ('SELECT block_num, block_time, trx_id, ' .
-             'cpu_weight AS cpu_stake, net_weight AS net_stake, ' .
-             'ram_quota AS ram_total_bytes, ram_usage AS ram_usage_bytes ' .
-             'FROM LIGHTAPI_LATEST_RESOURCE ' .
+            ('SELECT block_num, block_time, ' .
+             'cpu_weight, net_weight, ' .
+             'ram_bytes ' .
+             'FROM USERRES ' .
              'WHERE network=? AND account_name=?');
 
         $sth_bal = $dbh->prepare
-            ('SELECT block_num, block_time, trx_id, contract, currency, ' .
-             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
-             'FROM LIGHTAPI_CURRENCY_BAL ' .
+            ('SELECT block_num, block_time, contract, currency, ' .
+             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
+             'FROM CURRENCY_BAL ' .
              'WHERE network=? AND account_name=?');
 
         $sth_tokenbal = $dbh->prepare
             ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
-             'FROM LIGHTAPI_CURRENCY_BAL ' .
-             'WHERE network=? AND account_name=? AND contract=? AND currency=? AND deleted=0');
+             'FROM CURRENCY_BAL ' .
+             'WHERE network=? AND account_name=? AND contract=? AND currency=?');
 
         $sth_topholders = $dbh->prepare
             ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
-             'FROM LIGHTAPI_CURRENCY_BAL ' .
-             'WHERE network=? AND contract=? AND currency=? AND deleted=0 ' .
+             'FROM CURRENCY_BAL ' .
+             'WHERE network=? AND contract=? AND currency=? ' .
              'ORDER BY amount DESC LIMIT ?');
         
         $sth_perms = $dbh->prepare
-            ('SELECT perm, threshold, block_num, block_time, trx_id ' .
-             'FROM LIGHTAPI_AUTH_THRESHOLDS ' .
+            ('SELECT perm, threshold, block_num, block_time ' .
+             'FROM AUTH_THRESHOLDS ' .
              'WHERE network=? AND account_name=?');
 
         $sth_keys = $dbh->prepare
             ('SELECT pubkey, weight ' .
-             'FROM LIGHTAPI_AUTH_KEYS ' .
+             'FROM AUTH_KEYS ' .
              'WHERE network=? AND account_name=? AND perm=?');
 
         $sth_authacc = $dbh->prepare
             ('SELECT actor, permission, weight ' .
-             'FROM LIGHTAPI_AUTH_ACC ' .
+             'FROM AUTH_ACC ' .
              'WHERE network=? AND account_name=? AND perm=?');
 
         $sth_searchkey = $dbh->prepare
             ('SELECT network, account_name, perm, pubkey, weight ' .
-             'FROM LIGHTAPI_AUTH_KEYS ' .
+             'FROM AUTH_KEYS ' .
              'WHERE pubkey=?');
 
         $sth_acc_by_actor = $dbh->prepare
             ('SELECT account_name, perm ' .
-             'FROM LIGHTAPI_AUTH_ACC ' .
+             'FROM AUTH_ACC ' .
              'WHERE network=? AND actor=? AND permission=?');
 
         $sth_sync = $dbh->prepare
             ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
-             'FROM LIGHTAPI_SYNC WHERE network=?');
+             'FROM SYNC WHERE network=?');
     }
 }
 
