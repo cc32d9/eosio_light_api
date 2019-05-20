@@ -65,7 +65,7 @@ sudo cpanm Net::WebSocket::Server
 sudo cpanm Crypt::Digest::RIPEMD160;
 
 
-git https://github.com/cc32d9/eosio_light_api.git /opt/eosio_light_api
+git clone -b v2 https://github.com/cc32d9/eosio_light_api.git /opt/eosio_light_api
 cd /opt/eosio_light_api
 
 sudo mysql <sql/lightapi_dbcreate.sql
