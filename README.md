@@ -1,4 +1,4 @@
-# EOS ZMQ Light API
+# EOS Light API
 
 ## API description
 
@@ -10,14 +10,11 @@ The API is providing two fundamental functions for EOS blockchain:
 * Retrieve all accounts in all known EOS networks dependent on a public key:
  `http://apihost.domain/api/key/KEY`
 
-* In addition, adding `?pretty=1` to the URL, you get the resulting JSON
-  sorted and formatted for human viewing.
-
 * `http://apihost.domain/api/networks` lists all known networks and
   their information.
 
-* `http://apihost.domain/api/sync/eos` returns a plain text delay in
-  seconds that this server's blockchain database is behind the real
+* `http://apihost.domain/api/sync/eos` returns a plain text with delay
+  in seconds that this server's blockchain database is behind the real
   time, and a status: OK if the delay is within 180 seconds, or
   'OUT_OF_SYNC' otherwise.
 
@@ -30,6 +27,11 @@ The API is providing two fundamental functions for EOS blockchain:
   top NUM holders of a specified token in a JSON array containing arrays
   of (account, amount) pairs. NUM must not be less than 10 or more than
   1000.
+
+
+In addition, adding `?pretty=1` to the URL, you get the resulting JSON
+sorted and formatted for human viewing.
+
 
 
 ## Public endpoints
@@ -48,6 +50,7 @@ following links:
 
 * EOS Cafe Block (https://www.eoscafeblock.com/): new features
 
+* EOS Amsterdam and Newdex: development of Version 2
 
 
 ## Installation
@@ -61,15 +64,15 @@ sudo cpanm Starman
 sudo cpanm Net::WebSocket::Server
 sudo cpanm Crypt::Digest::RIPEMD160;
 
-cd /opt
-git clone https://github.com/cc32d9/eos_zmq_light_api.git
-cd eos_zmq_light_api
+
+git https://github.com/cc32d9/eosio_light_api.git /opt/eosio_light_api
+cd /opt/eosio_light_api
 
 sudo mysql <sql/lightapi_dbcreate.sql
 sh setup/add_eos_mainnet.sh
 
 vi /etc/default/lightapi_eos
-# add the ZMQ socket details:
+# add the Chronicle consumer socket details:
 # DBWRITE_OPTS=--port=8100
 
 # Optionally, edit /etc/default/lightapi_api and adjust variables
@@ -88,7 +91,7 @@ sh install_systemd_api.sh
 
 ## Copyright and License
 
-Copyright 2018 cc32d9@gmail.com
+Copyright 2018-2019 cc32d9@gmail.com
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
