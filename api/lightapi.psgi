@@ -23,6 +23,9 @@ my $sth_topholders;
 my $sth_perms;
 my $sth_keys;
 my $sth_authacc;
+my $sth_linkauth;
+my $sth_delegated_from;
+my $sth_delegated_to;
 my $sth_searchkey;
 my $sth_acc_by_actor;
 my $sth_sync;
@@ -82,6 +85,21 @@ sub check_dbserver
              'FROM AUTH_ACC ' .
              'WHERE network=? AND account_name=? AND perm=?');
 
+        $sth_linkauth = $dbh->prepare
+            ('SELECT code, type, requirement, block_num, block_time ' .
+             'FROM LINKAUTH ' .
+             'WHERE network=? AND account_name=?');
+
+        $sth_delegated_from = $dbh->prepare
+            ('SELECT del_from, cpu_weight, net_weight, block_num, block_time ' .
+             'FROM DELBAND ' .
+             'WHERE network=? AND account_name=?');
+        
+        $sth_delegated_to = $dbh->prepare
+            ('SELECT account_name, cpu_weight, net_weight, block_num, block_time ' .
+             'FROM DELBAND ' .
+             'WHERE network=? AND del_from=?');
+        
         $sth_searchkey = $dbh->prepare
             ('SELECT network, account_name, perm, pubkey, weight ' .
              'FROM AUTH_KEYS ' .
@@ -91,7 +109,7 @@ sub check_dbserver
             ('SELECT account_name, perm ' .
              'FROM AUTH_ACC ' .
              'WHERE network=? AND actor=? AND permission=?');
-
+        
         $sth_sync = $dbh->prepare
             ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
              'FROM SYNC WHERE network=?');
@@ -310,6 +328,16 @@ $builder->mount
          
          $result->{'permissions'} = get_permissions($network, $acc);
 
+         $sth_linkauth->execute($network, $acc);
+         $result->{'linkauth'} = $sth_linkauth->fetchall_arrayref({});
+
+         $sth_delegated_from->execute($network, $acc);
+         $result->{'delegated_from'} = $sth_delegated_from->fetchall_arrayref({});
+         
+         $sth_delegated_to->execute($network, $acc);
+         $result->{'delegated_to'} = $sth_delegated_to->fetchall_arrayref({});
+
+         
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
