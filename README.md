@@ -35,6 +35,11 @@ The API is providing two fundamental functions for EOS blockchain:
   in a JSON array containing arrays of (account, bytes) pairs. NUM must
   not be less than 10 or more than 1000.
 
+* `http://apihost.domain/api/codehash/SHA256` retrieves all accounts in
+  all known EOS networks by contract hash.
+ 
+
+
 In addition, adding `?pretty=1` to the URL, you get the resulting JSON
 sorted and formatted for human viewing.
 

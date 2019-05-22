@@ -26,10 +26,12 @@ my $sth_authacc;
 my $sth_linkauth;
 my $sth_delegated_from;
 my $sth_delegated_to;
+my $sth_get_code;
 my $sth_searchkey;
 my $sth_acc_by_actor;
 my $sth_usercount;
 my $sth_topram;
+my $sth_searchcode;
 my $sth_sync;
 
 sub check_dbserver
@@ -101,6 +103,11 @@ sub check_dbserver
             ('SELECT account_name, cpu_weight, net_weight, block_num, block_time ' .
              'FROM DELBAND ' .
              'WHERE network=? AND del_from=?');
+
+        $sth_get_code = $dbh->prepare
+            ('SELECT code_hash, block_num, block_time ' .
+             'FROM CODEHASH ' .
+             'WHERE network=? AND account_name=?');
         
         $sth_searchkey = $dbh->prepare
             ('SELECT network, account_name, perm, pubkey, weight ' .
@@ -118,6 +125,11 @@ sub check_dbserver
         $sth_topram = $dbh->prepare
             ('SELECT account_name, ram_bytes FROM USERRES ' .
              'WHERE network=? ORDER BY ram_bytes DESC LIMIT ?');
+
+        $sth_searchcode = $dbh->prepare
+            ('SELECT network, account_name, code_hash, block_num, block_time ' .
+             'FROM CODEHASH ' .
+             'WHERE code_hash=?');
         
         $sth_sync = $dbh->prepare
             ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
@@ -346,7 +358,14 @@ $builder->mount
          $sth_delegated_to->execute($network, $acc);
          $result->{'delegated_to'} = $sth_delegated_to->fetchall_arrayref({});
 
-         
+
+         $sth_get_code->execute($network, $acc);
+         my $r = $sth_get_code->fetchall_arrayref({});
+         if( scalar(@{$r}) > 0 )
+         {
+             $result->{'code'} = $r->[0];
+         }
+             
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
@@ -549,6 +568,45 @@ $builder->mount
              push(@{$result}, [$r->{'account_name'}, $r->{'ram_bytes'}]);
          }
 
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
+
+$builder->mount
+    ('/api/codehash' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)$/ or length($1) != 64 ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected SHA256 hash');
+             return $res->finalize;
+         }
+
+         my $codehash = $1;
+         check_dbserver();
+
+         $sth_searchcode->execute($codehash);
+         my $searchres = $sth_searchcode->fetchall_arrayref({});
+         my $result = {};
+         
+         foreach my $r (@{$searchres})
+         {
+             my $network = $r->{'network'};
+             if( not defined($result->{$network}) )
+             {
+                 $result->{$network}{'chain'} = get_network($network);
+             }
+
+             $result->{$network}{'accounts'}{$r->{'account_name'}} = $r;
+         }
+         
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
