@@ -28,6 +28,12 @@ The API is providing two fundamental functions for EOS blockchain:
   of (account, amount) pairs. NUM must not be less than 10 or more than
   1000.
 
+* `http://apihost.domain/api/usercount/eos`
+  returns a plain text with total number of accounts in the network.
+
+* `http://apihost.domain/api/topram/eos/NUM` returns top NUM RAM buyers
+  in a JSON array containing arrays of (account, bytes) pairs. NUM must
+  not be less than 10 or more than 1000.
 
 In addition, adding `?pretty=1` to the URL, you get the resulting JSON
 sorted and formatted for human viewing.

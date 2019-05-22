@@ -28,6 +28,8 @@ my $sth_delegated_from;
 my $sth_delegated_to;
 my $sth_searchkey;
 my $sth_acc_by_actor;
+my $sth_usercount;
+my $sth_topram;
 my $sth_sync;
 
 sub check_dbserver
@@ -109,6 +111,13 @@ sub check_dbserver
             ('SELECT account_name, perm ' .
              'FROM AUTH_ACC ' .
              'WHERE network=? AND actor=? AND permission=?');
+
+        $sth_usercount = $dbh->prepare
+            ('SELECT count(*) as usercount FROM USERRES WHERE network=?');
+        
+        $sth_topram = $dbh->prepare
+            ('SELECT account_name, ram_bytes FROM USERRES ' .
+             'WHERE network=? ORDER BY ram_bytes DESC LIMIT ?');
         
         $sth_sync = $dbh->prepare
             ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
@@ -479,6 +488,74 @@ $builder->mount
          $res->body($j->encode($result));
          $res->finalize;
      });
+
+
+$builder->mount
+    ('/api/usercount' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         check_dbserver();
+
+         $sth_usercount->execute($network);
+         my $r = $sth_usercount->fetchall_arrayref();
+
+         my $res = $req->new_response(200);
+         $res->content_type('text/plain');
+         $res->body($r->[0][0]);
+         $res->finalize;
+     });
+
+
+$builder->mount
+    ('/api/topram' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/(\d+)$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name and count in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $count = $2;
+
+         if( $count < 10 or $count > 1000 )
+         {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Invalid count: ' . $count);
+             return $res->finalize;
+         }
+             
+         check_dbserver();
+         $sth_topram->execute($network, $count);
+         my $all = $sth_topram->fetchall_arrayref({});
+         my $result = [];
+         foreach my $r (@{$all})
+         {
+             push(@{$result}, [$r->{'account_name'}, $r->{'ram_bytes'}]);
+         }
+
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
 
 $builder->mount
     ('/api/sync' => sub {
