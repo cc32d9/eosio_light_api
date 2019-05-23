@@ -2,7 +2,9 @@
 
 ## API description
 
-The API is providing two fundamental functions for EOS blockchain:
+The API is providing information about EOSIO blockchain accounts and
+token balances. here "eos" is the name of the network where API is
+taking the data.
 
 * Retrieve all token balances and resources for an account:
  `http://apihost.domain/api/account/eos/ACCOUNT`
