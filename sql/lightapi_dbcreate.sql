@@ -137,12 +137,13 @@ CREATE TABLE USERRES
  block_time        DATETIME NOT NULL,
  cpu_weight        BIGINT UNSIGNED NOT NULL,
  net_weight        BIGINT UNSIGNED NOT NULL,
- ram_bytes         BIGINT UNSIGNED NOT NULL
+ ram_bytes         BIGINT UNSIGNED NOT NULL,
+ weight_sum        BIGINT AS (cpu_weight+net_weight) PERSISTENT
 ) ENGINE=InnoDB;
 
 CREATE UNIQUE INDEX USERRES_I01 ON USERRES (network, account_name);
 CREATE INDEX USERRES_I02 ON USERRES (network, ram_bytes);
-
+CREATE INDEX USERRES_I03 ON USERRES (network, weight_sum);
 
 
 

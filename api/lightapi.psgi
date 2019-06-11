@@ -31,6 +31,7 @@ my $sth_searchkey;
 my $sth_acc_by_actor;
 my $sth_usercount;
 my $sth_topram;
+my $sth_topstake;
 my $sth_searchcode;
 my $sth_sync;
 
@@ -126,6 +127,10 @@ sub check_dbserver
             ('SELECT account_name, ram_bytes FROM USERRES ' .
              'WHERE network=? ORDER BY ram_bytes DESC LIMIT ?');
 
+        $sth_topstake = $dbh->prepare
+            ('SELECT account_name, cpu_weight, net_weight FROM USERRES ' .
+             'WHERE network=? ORDER BY weight_sum DESC LIMIT ?');
+        
         $sth_searchcode = $dbh->prepare
             ('SELECT network, account_name, code_hash, block_num, block_time ' .
              'FROM CODEHASH ' .
@@ -574,6 +579,48 @@ $builder->mount
          $res->body($j->encode($result));
          $res->finalize;
      });
+
+
+$builder->mount
+    ('/api/topstake' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/(\d+)$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name and count in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $count = $2;
+
+         if( $count < 10 or $count > 1000 )
+         {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Invalid count: ' . $count);
+             return $res->finalize;
+         }
+             
+         check_dbserver();
+         $sth_topstake->execute($network, $count);
+         my $all = $sth_topstake->fetchall_arrayref({});
+         my $result = [];
+         foreach my $r (@{$all})
+         {
+             push(@{$result}, [$r->{'account_name'}, $r->{'cpu_weight'}, $r->{'net_weight'} ]);
+         }
+
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
 
 
 $builder->mount

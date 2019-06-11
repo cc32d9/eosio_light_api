@@ -37,6 +37,11 @@ taking the data.
   in a JSON array containing arrays of (account, bytes) pairs. NUM must
   not be less than 10 or more than 1000.
 
+* `http://apihost.domain/api/topstake/eos/NUM` returns top NUM stake
+  holders by sum of CPU and Net stakes, in a JSON array containing
+  arrays of (account, cpu_weight, net_weight) tuples. NUM must not be
+  less than 10 or more than 1000.
+
 * `http://apihost.domain/api/codehash/SHA256` retrieves all accounts in
   all known EOS networks by contract hash.
  
