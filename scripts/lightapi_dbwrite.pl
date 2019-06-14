@@ -21,6 +21,7 @@ my $dsn = 'DBI:MariaDB:database=lightapi;host=localhost';
 my $db_user = 'lightapi';
 my $db_password = 'ce1Shish';
 
+my $pre18;
 
 my $ok = GetOptions
     ('network=s' => \$network,
@@ -28,7 +29,8 @@ my $ok = GetOptions
      'ack=i'     => \$ack_every,     
      'dsn=s'     => \$dsn,
      'dbuser=s'  => \$db_user,
-     'dbpw=s'    => \$db_password);
+     'dbpw=s'    => \$db_password,
+     'pre18'     => \$pre18);
 
 
 if( not $ok or scalar(@ARGV) > 0 or not $network )
@@ -41,7 +43,8 @@ if( not $ok or scalar(@ARGV) > 0 or not $network )
     "  --network=NAME     name of EOS network\n",
     "  --dsn=DSN          \[$dsn\]\n",
     "  --dbuser=USER      \[$db_user\]\n",
-    "  --dbpw=PASSWORD    \[$db_password\]\n";
+    "  --dbpw=PASSWORD    \[$db_password\]\n",
+    "  --pre18            nodeos prior to version 1.8\n";
     exit 1;
 }
 
@@ -207,74 +210,19 @@ sub process_data
             my $block_num = $data->{'block_num'};
             my $block_time = $data->{'block_timestamp'};
             $block_time =~ s/T/ /;
-            
-            foreach my $atrace ( @{$trace->{'action_traces'}} )
+
+            if( $pre18 )
             {
-                my $act = $atrace->{'act'};
-                
-                if( $atrace->{'receipt'}{'receiver'} eq 'eosio' and $act->{'account'} eq 'eosio' )
+                process_pre18_traces($trace->{'traces'}, $block_num, $block_time);
+            }
+            else
+            {
+                foreach my $atrace ( @{$trace->{'action_traces'}} )
                 {
-                    my $aname = $act->{'name'};
-                    my $data = $act->{'data'};
-                    
-                    if( ref($data) eq 'HASH' )
+                    my $act = $atrace->{'act'};
+                    if( $atrace->{'receipt'}{'receiver'} eq 'eosio' and $act->{'account'} eq 'eosio' )
                     {
-                        if( $aname eq 'newaccount' )
-                        {
-                            my $name = $data->{'name'};
-                            if( not defined($name) )
-                            {
-                                # workaround for https://github.com/EOSIO/eosio.contracts/pull/129
-                                $name = $data->{'newact'};
-                            }
-                            
-                            $db->{'sth_upd_auth'}->execute
-                                ($network, $name, $block_num, $block_time, 'owner',
-                                 $json->encode($data->{'owner'}), 0);
-                            
-                            $db->{'sth_upd_auth'}->execute
-                                ($network, $name, $block_num, $block_time, 'active',
-                                 $json->encode($data->{'active'}), 0);
-                        }
-                        elsif( $aname eq 'updateauth' )
-                        {
-                            $db->{'sth_upd_auth'}->execute
-                                ($network, $data->{'account'}, $block_num, $block_time,
-                                 $data->{'permission'}, $json->encode($data->{'auth'}), 0);
-                        }
-                        elsif( $aname eq 'deleteauth' )
-                        {
-                            $db->{'sth_upd_auth'}->execute
-                                ($network, $data->{'account'}, $block_num, $block_time,
-                                 $data->{'permission'}, '{}', 1);
-                        }
-                        elsif( $aname eq 'setcode' )
-                        {
-                            my $hash = '';
-                            my $deleted = 1;
-                            
-                            if( length($data->{'code'}) > 0 )
-                            {
-                                $hash = sha256_hex(pack('H*', $data->{'code'}));
-                                $deleted = 0;
-                            }
-                            
-                            $db->{'sth_upd_codehash'}->execute
-                                ($network, $data->{'account'}, $block_num, $block_time,
-                                 $hash, $deleted);
-                        }
-                        elsif( $aname eq 'linkauth' )
-                        {
-                            $db->{'sth_upd_linkauth'}->execute
-                                ($network, map({$data->{$_}} qw(account code type requirement)),
-                                 $block_num, $block_time, 0);
-                        }
-                        elsif( $aname eq 'unlinkauth' )
-                        {
-                            $db->{'sth_upd_linkauth'}->execute
-                                ($network, map({$data->{$_}} qw(account code type)), '',
-                                 $block_num, $block_time, 1);
-                        }
+                        process_eosio_trace($act->{'name'}, $act->{'data'}, $block_num, $block_time);
                     }
                 }
             }
@@ -487,10 +435,99 @@ sub process_data
     }
     return 0;
 }
-    
-    
 
 
+
+sub process_pre18_traces
+{
+    my $traces = shift;
+    my $block_num = shift;
+    my $block_time = shift;
+
+    foreach my $atrace (@{$traces})
+    {
+        if( $atrace->{'receipt'}{'receiver'} eq 'eosio' and $atrace->{'account'} eq 'eosio' )
+        {
+            process_eosio_trace($atrace->{'name'}, $atrace->{'data'}, $block_num, $block_time);
+        }
+
+        if( defined($atrace->{'inline_traces'}) )
+        {
+            process_pre18_traces($atrace->{'inline_traces'}, $block_num, $block_time);
+        }
+    }
+}
+
+
+
+sub process_eosio_trace
+{
+    my $aname = shift;
+    my $data = shift;
+    my $block_num = shift;
+    my $block_time = shift;
+
+    return if (ref($data) ne 'HASH');
+
+    if( $aname eq 'newaccount' )
+    {
+        my $name = $data->{'name'};
+        if( not defined($name) )
+        {
+            # workaround for https://github.com/EOSIO/eosio.contracts/pull/129
+            $name = $data->{'newact'};
+        }
+        
+        $db->{'sth_upd_auth'}->execute
+            ($network, $name, $block_num, $block_time, 'owner',
+             $json->encode($data->{'owner'}), 0);
+        
+        $db->{'sth_upd_auth'}->execute
+            ($network, $name, $block_num, $block_time, 'active',
+             $json->encode($data->{'active'}), 0);
+    }
+    elsif( $aname eq 'updateauth' )
+    {
+        $db->{'sth_upd_auth'}->execute
+            ($network, $data->{'account'}, $block_num, $block_time,
+             $data->{'permission'}, $json->encode($data->{'auth'}), 0);
+    }
+    elsif( $aname eq 'deleteauth' )
+    {
+        $db->{'sth_upd_auth'}->execute
+            ($network, $data->{'account'}, $block_num, $block_time,
+             $data->{'permission'}, '{}', 1);
+    }
+    elsif( $aname eq 'setcode' )
+    {
+        my $hash = '';
+        my $deleted = 1;
+        
+        if( length($data->{'code'}) > 0 )
+        {
+            $hash = sha256_hex(pack('H*', $data->{'code'}));
+            $deleted = 0;
+        }
+        
+        $db->{'sth_upd_codehash'}->execute
+            ($network, $data->{'account'}, $block_num, $block_time,
+             $hash, $deleted);
+    }
+    elsif( $aname eq 'linkauth' )
+    {
+        $db->{'sth_upd_linkauth'}->execute
+            ($network, map({$data->{$_}} qw(account code type requirement)),
+             $block_num, $block_time, 0);
+    }
+    elsif( $aname eq 'unlinkauth' )
+    {
+        $db->{'sth_upd_linkauth'}->execute
+            ($network, map({$data->{$_}} qw(account code type)), '',
+             $block_num, $block_time, 1);
+    }
+}
+
+        
 
 sub getdb
 {
