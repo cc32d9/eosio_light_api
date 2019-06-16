@@ -1,4 +1,4 @@
-# EOS Light API
+# EOSIO Light API
 
 ## API description
 
@@ -52,6 +52,11 @@ sorted and formatted for human viewing.
 
 
 
+* `http://apihost.domain/api/holdercount/eos/CONTRACT/TOKEN` returns a
+  plaintext integer indicating the number of accounts with positive
+  balance for a specified token.
+
+
 ## Public endpoints
 
 A list of public API endpoints is served by IPFS, and available with the
@@ -64,11 +69,13 @@ following links:
 
 ## Project sponsors
 
-* GetScatter (https://get-scatter.com/): engineering, hosting and maintenance
+* GetScatter (https://get-scatter.com/): engineering, hosting and maintenance.
 
-* EOS Cafe Block (https://www.eoscafeblock.com/): new features
+* EOS Cafe Block (https://www.eoscafeblock.com/): new features.
 
-* EOS Amsterdam and Newdex: development of Version 2
+* Telos community: development of additional features in Chronicle.
+
+* EOS Amsterdam and Newdex: development of Version 2.
 
 
 ## Installation
