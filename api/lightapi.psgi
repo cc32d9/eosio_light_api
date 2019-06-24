@@ -17,13 +17,19 @@ my $dbh;
 my $sth_allnetworks;
 my $sth_getnet;
 my $sth_res;
+my $sth_res_upd;
 my $sth_bal;
+my $sth_bal_upd;
 my $sth_tokenbal;
+my $sth_tokenbal_upd;
 my $sth_topholders;
 my $sth_perms;
 my $sth_keys;
 my $sth_authacc;
+my $sth_auth_upd;
+my $sth_acc_auth_upd;
 my $sth_linkauth;
+my $sth_linkauth_upd;
 my $sth_delegated_from;
 my $sth_delegated_to;
 my $sth_get_code;
@@ -58,23 +64,41 @@ sub check_dbserver
              'FROM USERRES ' .
              'WHERE network=? AND account_name=?');
 
+        $sth_res_upd = $dbh->prepare
+            ('SELECT block_num, block_time, ' .
+             'cpu_weight, net_weight, ' .
+             'ram_bytes ' .
+             'FROM UPD_USERRES ' .
+             'WHERE network=? AND account_name=? ORDER BY id');
+
         $sth_bal = $dbh->prepare
             ('SELECT block_num, block_time, contract, currency, ' .
              'CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
              'FROM CURRENCY_BAL ' .
              'WHERE network=? AND account_name=?');
 
+        $sth_bal_upd = $dbh->prepare
+            ('SELECT block_num, block_time, contract, currency, ' .
+             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
+             'FROM UPD_CURRENCY_BAL ' .
+             'WHERE network=? AND account_name=? ORDER BY id');
+
         $sth_tokenbal = $dbh->prepare
             ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
              'FROM CURRENCY_BAL ' .
              'WHERE network=? AND account_name=? AND contract=? AND currency=?');
+
+        $sth_tokenbal_upd = $dbh->prepare
+            ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
+             'FROM UPD_CURRENCY_BAL ' .
+             'WHERE network=? AND account_name=? AND contract=? AND currency=? ORDER BY id');
 
         $sth_topholders = $dbh->prepare
             ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
              'FROM CURRENCY_BAL ' .
              'WHERE network=? AND contract=? AND currency=? ' .
              'ORDER BY amount DESC LIMIT ?');
-        
+
         $sth_perms = $dbh->prepare
             ('SELECT perm, threshold, block_num, block_time ' .
              'FROM AUTH_THRESHOLDS ' .
@@ -90,16 +114,29 @@ sub check_dbserver
              'FROM AUTH_ACC ' .
              'WHERE network=? AND account_name=? AND perm=?');
 
+        $sth_auth_upd = $dbh->prepare
+            ('SELECT network, account_name, block_num, block_time, perm, jsdata, deleted ' .
+             'FROM UPD_AUTH ORDER BY id');
+
+        $sth_acc_auth_upd = $dbh->prepare
+            ('SELECT block_num, block_time, perm, jsdata, deleted ' .
+             'FROM UPD_AUTH WHERE network=? AND account_name=? ORDER BY id');
+
         $sth_linkauth = $dbh->prepare
             ('SELECT code, type, requirement, block_num, block_time ' .
              'FROM LINKAUTH ' .
              'WHERE network=? AND account_name=?');
 
+        $sth_linkauth_upd = $dbh->prepare
+            ('SELECT code, type, requirement, block_num, block_time ' .
+             'FROM UPD_LINKAUTH ' .
+             'WHERE network=? AND account_name=? ORDER BY id');
+
         $sth_delegated_from = $dbh->prepare
             ('SELECT del_from, cpu_weight, net_weight, block_num, block_time ' .
              'FROM DELBAND ' .
              'WHERE network=? AND account_name=?');
-        
+
         $sth_delegated_to = $dbh->prepare
             ('SELECT account_name, cpu_weight, net_weight, block_num, block_time ' .
              'FROM DELBAND ' .
@@ -109,7 +146,7 @@ sub check_dbserver
             ('SELECT code_hash, block_num, block_time ' .
              'FROM CODEHASH ' .
              'WHERE network=? AND account_name=?');
-        
+
         $sth_searchkey = $dbh->prepare
             ('SELECT network, account_name, perm, pubkey, weight ' .
              'FROM AUTH_KEYS ' .
@@ -122,7 +159,7 @@ sub check_dbserver
 
         $sth_usercount = $dbh->prepare
             ('SELECT count(*) as usercount FROM USERRES WHERE network=?');
-        
+
         $sth_topram = $dbh->prepare
             ('SELECT account_name, ram_bytes FROM USERRES ' .
              'WHERE network=? ORDER BY ram_bytes DESC LIMIT ?');
@@ -130,12 +167,12 @@ sub check_dbserver
         $sth_topstake = $dbh->prepare
             ('SELECT account_name, cpu_weight, net_weight FROM USERRES ' .
              'WHERE network=? ORDER BY weight_sum DESC LIMIT ?');
-        
+
         $sth_searchcode = $dbh->prepare
             ('SELECT network, account_name, code_hash, block_num, block_time ' .
              'FROM CODEHASH ' .
              'WHERE code_hash=?');
-        
+
         $sth_sync = $dbh->prepare
             ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
              'FROM SYNC WHERE network=?');
@@ -165,9 +202,9 @@ my @alphabet = qw(
     A B C D E F G H J K L M N P Q R S T U V W X Y Z
     a b c d e f g h i j k m n o p q r s t u v w x y z
 );
- 
+
 my %alphabet_mapped;
- 
+
 {
     my $i;
     for ($i = 0; $i < @alphabet; ++$i) {
@@ -245,13 +282,13 @@ sub to_legacy_key
     }
     return $pubkey;
 }
-        
+
 
 sub get_permissions
 {
     my $network = shift;
     my $acc = shift;
-    
+
     $sth_perms->execute($network, $acc);
     my $perms = $sth_perms->fetchall_arrayref({});
     foreach my $permission (@{$perms}) {
@@ -263,7 +300,7 @@ sub get_permissions
             $row->{'pubkey'} = to_legacy_key($newformat);
             $row->{'public_key'} = $newformat;
         }
-        
+
         $sth_authacc->execute($network, $acc, $permission->{'perm'});
         $permission->{'auth'}{'accounts'} = $sth_authacc->fetchall_arrayref({});
     }
@@ -292,8 +329,44 @@ sub get_authorized_accounts
         }
     }
 }
-        
-    
+
+
+sub auth_upd_row_to_perm
+{
+    my $row = shift;
+    my $auth = shift;
+
+    my $ret = {};
+    foreach my $attr ('block_num', 'block_time', 'perm')
+    {
+        $ret->{$attr} = $row->{$attr};
+    }
+
+    $ret->{'auth'} = {'keys' => [], 'accounts' => [], 'threshold' => $auth->{'threshold'}};
+
+    foreach my $keydata (@{$auth->{'keys'}})
+    {
+        push(@{$ret->{'auth'}{'keys'}},
+             {
+              'pubkey' => to_legacy_key($keydata->{'key'}),
+              'public_key' => $keydata->{'key'},
+              'weight' => $keydata->{'weight'}
+             });
+    }
+
+    foreach my $accdata (@{$auth->{'accounts'}})
+    {
+        push(@{$ret->{'auth'}{'accounts'}},
+             {
+              'actor' => $accdata->{'permission'}{'actor'},
+              'permission' => $accdata->{'permission'}{'permission'},
+              'weight' => $accdata->{'weight'}
+             });
+    }
+
+    return $ret;
+}
+
 
 my $json = JSON->new();
 my $jsonp = JSON->new()->pretty->canonical;
@@ -345,21 +418,105 @@ $builder->mount
          $sth_res->execute($network, $acc);
          $result->{'resources'} = $sth_res->fetchrow_hashref();
 
+         $sth_res_upd->execute($network, $acc);
+         my $res_upd = $sth_res_upd->fetchall_arrayref({});
+         foreach my $row (@{$res_upd})
+         {
+             $result->{'resources'} = $row;
+         }
+
          $sth_bal->execute($network, $acc);
-         $result->{'balances'} = $sth_bal->fetchall_arrayref({});
-         foreach my $row (@{$result->{'balances'}})
+         my $balarray = $sth_bal->fetchall_arrayref({});
+         my $balhash = {};
+         foreach my $row (@{$balarray})
          {
              $row->{'amount'} = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
+             $balhash->{$row->{'contract'}}{$row->{'currency'}} = $row;
          }
-         
+
+         $sth_bal_upd->execute($network, $acc);
+         my $bal_upd = $sth_bal_upd->fetchall_arrayref({});
+         foreach my $row (@{$bal_upd})
+         {
+             if( $row->{'deleted'} )
+             {
+                 delete $balhash->{$row->{'contract'}}{$row->{'currency'}};
+             }
+             else
+             {
+                 delete $row->{'deleted'};
+                 $row->{'amount'} = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
+                 $balhash->{$row->{'contract'}}{$row->{'currency'}} = $row;
+             }
+         }
+
+         $result->{'balances'} = [];
+         foreach my $contract (sort keys %{$balhash})
+         {
+             foreach my $currency (sort keys %{$balhash->{$contract}})
+             {
+                 push(@{$result->{'balances'}}, $balhash->{$contract}{$currency});
+             }
+         }
+
          $result->{'permissions'} = get_permissions($network, $acc);
 
+         $sth_acc_auth_upd->execute($network, $acc);
+         my $auth_upd = $sth_acc_auth_upd->fetchall_arrayref({});
+         foreach my $row (@{$auth_upd})
+         {
+             my $newperms = [];
+             foreach my $p (@{$result->{'permissions'}})
+             {
+                 if( $p->{'perm'} ne $row->{'perm'} )
+                 {
+                     push(@{$newperms}, $p);
+                 }
+             }
+
+             if( not $row->{'deleted'} )
+             {
+                 push(@{$newperms}, auth_upd_row_to_perm($row, $json->decode($row->{'jsdata'})));
+             }
+
+             $result->{'permissions'} = $newperms;
+         }
+
          $sth_linkauth->execute($network, $acc);
-         $result->{'linkauth'} = $sth_linkauth->fetchall_arrayref({});
+         my $linkauth_rows = $sth_linkauth->fetchall_arrayref({});
+         my %linkauth;
+         foreach my $row (@{$linkauth_rows})
+         {
+             $linkauth{$row->{'code'}{$row->{'type'}}} = $row;
+         }
+
+         $sth_linkauth_upd->execute($network, $acc);
+         my $linkauth_upd = $sth_linkauth_upd->fetchall_arrayref({});
+         foreach my $row (@{$linkauth_upd})
+         {
+             if( $row->{'deleted'} )
+             {
+                 delete $linkauth{$row->{'code'}{$row->{'type'}}};
+             }
+             else
+             {
+                 delete $row->{'deleted'};
+                 $linkauth{$row->{'code'}{$row->{'type'}}} = $row;
+             }
+         }
+
+         $result->{'linkauth'} = [];
+         foreach my $code (sort keys %linkauth)
+         {
+             foreach my $type (sort keys %{$linkauth{$code}})
+             {
+                 push(@{$result->{'linkauth'}}, $linkauth{$code}{$type});
+             }
+         }
 
          $sth_delegated_from->execute($network, $acc);
          $result->{'delegated_from'} = $sth_delegated_from->fetchall_arrayref({});
-         
+
          $sth_delegated_to->execute($network, $acc);
          $result->{'delegated_to'} = $sth_delegated_to->fetchall_arrayref({});
 
@@ -370,7 +527,7 @@ $builder->mount
          {
              $result->{'code'} = $r->[0];
          }
-             
+
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
@@ -403,7 +560,21 @@ $builder->mount
          {
              $result = sprintf('%.'.$r->[0]{'decimals'} . 'f', $r->[0]{'amount'});
          }
-         
+
+         $sth_tokenbal_upd->execute($network, $acc, $contract, $currency);
+         my $updates = $sth_tokenbal_upd->fetchall_arrayref({});
+         foreach my $row (@{$updates})
+         {
+             if( $row->{'deleted'} )
+             {
+                 $result = '0';
+             }
+             else
+             {
+                 $result = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
+             }
+         }
+
          my $res = $req->new_response(200);
          $res->content_type('text/plain');
          $res->body($result);
@@ -435,17 +606,17 @@ $builder->mount
              $res->body('Invalid count: ' . $count);
              return $res->finalize;
          }
-             
+
          check_dbserver();
          $sth_topholders->execute($network, $contract, $currency, $count);
          my $all = $sth_topholders->fetchall_arrayref({});
          my $result = [];
          foreach my $r (@{$all})
          {
-             push(@{$result}, [$r->{'account_name'}, 
+             push(@{$result}, [$r->{'account_name'},
                                sprintf('%.'.$r->{'decimals'} . 'f', $r->{'amt'})]);
          }
-         
+
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
@@ -475,7 +646,7 @@ $builder->mount
          my $result = {};
 
          my $accounts = {};
-         
+
          foreach my $r (@{$searchres})
          {
              my $network = $r->{'network'};
@@ -497,7 +668,24 @@ $builder->mount
                  }
              }
          }
-         
+
+         $sth_auth_upd->execute();
+         my $updates = $sth_auth_upd->fetchall_arrayref({});
+
+         foreach my $row (@{$updates})
+         {
+             my $auth = $row->{'auth'} = $json->decode($row->{'jsdata'});
+             foreach my $keydata (@{$auth->{'keys'}})
+             {
+                 if( $keydata->{'key'} eq $key )
+                 {
+                     $accounts->{$row->{'network'}}{$row->{'account_name'}}{$row->{'perm'}} = 1;
+                     get_authorized_accounts($row->{'network'}, $row->{'account_name'},
+                                             $row->{'perm'}, $accounts);
+                 }
+             }
+         }
+
          foreach my $network (keys %{$accounts})
          {
              foreach my $acc (keys %{$accounts->{$network}})
@@ -505,7 +693,33 @@ $builder->mount
                  $result->{$network}{'accounts'}{$acc} = get_permissions($network, $acc);
              }
          }
-         
+
+         foreach my $row (@{$updates})
+         {
+             my $network = $row->{'network'};
+             my $acc = $row->{'account_name'};
+             if( defined($result->{$network}{'accounts'}{$acc}) )
+             {
+                 my $perms = $result->{$network}{'accounts'}{$acc};
+                 my $newperms = [];
+
+                 foreach my $p (@{$perms})
+                 {
+                     if( $p->{'perm'} ne $row->{'perm'} )
+                     {
+                         push(@{$newperms}, $p);
+                     }
+                 }
+
+                 if( not $row->{'deleted'} )
+                 {
+                     push(@{$newperms}, auth_upd_row_to_perm($row, $row->{'auth'}));
+                 }
+
+                 $result->{$network}{'accounts'}{$acc} = $newperms;
+             }
+         }
+
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
@@ -563,7 +777,7 @@ $builder->mount
              $res->body('Invalid count: ' . $count);
              return $res->finalize;
          }
-             
+
          check_dbserver();
          $sth_topram->execute($network, $count);
          my $all = $sth_topram->fetchall_arrayref({});
@@ -604,7 +818,7 @@ $builder->mount
              $res->body('Invalid count: ' . $count);
              return $res->finalize;
          }
-             
+
          check_dbserver();
          $sth_topstake->execute($network, $count);
          my $all = $sth_topstake->fetchall_arrayref({});
@@ -642,7 +856,7 @@ $builder->mount
          $sth_searchcode->execute($codehash);
          my $searchres = $sth_searchcode->fetchall_arrayref({});
          my $result = {};
-         
+
          foreach my $r (@{$searchres})
          {
              my $network = $r->{'network'};
@@ -653,7 +867,7 @@ $builder->mount
 
              $result->{$network}{'accounts'}{$r->{'account_name'}} = $r;
          }
-         
+
          my $res = $req->new_response(200);
          $res->content_type('application/json');
          my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
