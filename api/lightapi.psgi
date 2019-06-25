@@ -31,8 +31,11 @@ my $sth_acc_auth_upd;
 my $sth_linkauth;
 my $sth_linkauth_upd;
 my $sth_delegated_from;
+my $sth_delegated_from_upd;
 my $sth_delegated_to;
+my $sth_delegated_to_upd;
 my $sth_get_code;
+my $sth_get_code_upd;
 my $sth_searchkey;
 my $sth_acc_by_actor;
 my $sth_usercount;
@@ -67,7 +70,7 @@ sub check_dbserver
         $sth_res_upd = $dbh->prepare
             ('SELECT block_num, block_time, ' .
              'cpu_weight, net_weight, ' .
-             'ram_bytes ' .
+             'ram_bytes, deleted ' .
              'FROM UPD_USERRES ' .
              'WHERE network=? AND account_name=? ORDER BY id');
 
@@ -128,7 +131,7 @@ sub check_dbserver
              'WHERE network=? AND account_name=?');
 
         $sth_linkauth_upd = $dbh->prepare
-            ('SELECT code, type, requirement, block_num, block_time ' .
+            ('SELECT code, type, requirement, block_num, block_time, deleted ' .
              'FROM UPD_LINKAUTH ' .
              'WHERE network=? AND account_name=? ORDER BY id');
 
@@ -137,15 +140,30 @@ sub check_dbserver
              'FROM DELBAND ' .
              'WHERE network=? AND account_name=?');
 
+        $sth_delegated_from_upd = $dbh->prepare
+            ('SELECT del_from, cpu_weight, net_weight, block_num, block_time, deleted ' .
+             'FROM UPD_DELBAND ' .
+             'WHERE network=? AND account_name=? ORDER BY id');
+
         $sth_delegated_to = $dbh->prepare
             ('SELECT account_name, cpu_weight, net_weight, block_num, block_time ' .
              'FROM DELBAND ' .
              'WHERE network=? AND del_from=?');
 
+        $sth_delegated_to_upd = $dbh->prepare
+            ('SELECT account_name, cpu_weight, net_weight, block_num, block_time, deleted ' .
+             'FROM UPD_DELBAND ' .
+             'WHERE network=? AND del_from=? ORDER BY id');
+
         $sth_get_code = $dbh->prepare
             ('SELECT code_hash, block_num, block_time ' .
              'FROM CODEHASH ' .
              'WHERE network=? AND account_name=?');
+
+        $sth_get_code_upd = $dbh->prepare
+            ('SELECT code_hash, block_num, block_time, deleted ' .
+             'FROM UPD_CODEHASH ' .
+             'WHERE network=? AND account_name=? ORDER BY id');
 
         $sth_searchkey = $dbh->prepare
             ('SELECT network, account_name, perm, pubkey, weight ' .
@@ -514,11 +532,55 @@ $builder->mount
              }
          }
 
-         $sth_delegated_from->execute($network, $acc);
-         $result->{'delegated_from'} = $sth_delegated_from->fetchall_arrayref({});
+         {
+             $sth_delegated_from->execute($network, $acc);
+             my $delfrom = $sth_delegated_from->fetchall_hashref('del_from');
+             $sth_delegated_from_upd->execute($network, $acc);
+             my $del_from_upd = $sth_delegated_from_upd->fetchall_arrayref({});
+             foreach my $row (@{$del_from_upd})
+             {
+                 if( $row->{'deleted'} )
+                 {
+                     delete $delfrom->{$row->{'del_from'}};
+                 }
+                 else
+                 {
+                     delete $row->{'deleted'};
+                     $delfrom->{$row->{'del_from'}} = $row;
+                 }
+             }
 
-         $sth_delegated_to->execute($network, $acc);
-         $result->{'delegated_to'} = $sth_delegated_to->fetchall_arrayref({});
+             $result->{'delegated_from'} = [];
+             foreach my $name (sort keys %{$delfrom})
+             {
+                 push(@{$result->{'delegated_from'}}, $delfrom->{$name});
+             }
+         }
+
+         {
+             $sth_delegated_to->execute($network, $acc);
+             my $delto = $sth_delegated_to->fetchall_hashref('account_name');
+             $sth_delegated_to_upd->execute($network, $acc);
+             my $del_to_upd = $sth_delegated_to_upd->fetchall_arrayref({});
+             foreach my $row (@{$del_to_upd})
+             {
+                 if( $row->{'deleted'} )
+                 {
+                     delete $delto->{$row->{'account_name'}};
+                 }
+                 else
+                 {
+                     delete $row->{'deleted'};
+                     $delto->{$row->{'account_name'}} = $row;
+                 }
+             }
+
+             $result->{'delegated_to'} = [];
+             foreach my $name (sort keys %{$delto})
+             {
+                 push(@{$result->{'delegated_to'}}, $delto->{$name});
+             }
+         }
 
 
          $sth_get_code->execute($network, $acc);
@@ -526,6 +588,21 @@ $builder->mount
          if( scalar(@{$r}) > 0 )
          {
              $result->{'code'} = $r->[0];
+         }
+
+         $sth_get_code_upd->execute($network, $acc);
+         my $code_upd = $sth_get_code_upd->fetchall_arrayref({});
+         foreach my $row (@{$code_upd})
+         {
+             if( $row->{'deleted'} )
+             {
+                 delete $result->{'code'};
+             }
+             else
+             {
+                 delete $row->{'deleted'};
+                 $result->{'code'} = $row;
+             }
          }
 
          my $res = $req->new_response(200);
