@@ -505,7 +505,7 @@ $builder->mount
          my %linkauth;
          foreach my $row (@{$linkauth_rows})
          {
-             $linkauth{$row->{'code'}{$row->{'type'}}} = $row;
+             $linkauth{$row->{'code'}}{$row->{'type'}} = $row;
          }
 
          $sth_linkauth_upd->execute($network, $acc);
@@ -514,12 +514,12 @@ $builder->mount
          {
              if( $row->{'deleted'} )
              {
-                 delete $linkauth{$row->{'code'}{$row->{'type'}}};
+                 delete $linkauth{$row->{'code'}}{$row->{'type'}};
              }
              else
              {
                  delete $row->{'deleted'};
-                 $linkauth{$row->{'code'}{$row->{'type'}}} = $row;
+                 $linkauth{$row->{'code'}}{$row->{'type'}} = $row;
              }
          }
 
