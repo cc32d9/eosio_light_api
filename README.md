@@ -6,8 +6,11 @@ The API is providing information about EOSIO blockchain accounts and
 token balances. Here "eos" is the name of the network where API is
 taking the data.
 
-* Retrieve all token balances and resources for an account:
- `http://apihost.domain/api/account/eos/ACCOUNT`
+* Retrieve all token balances, resources and authorization information
+ for an account: `http://apihost.domain/api/account/eos/ACCOUNT`
+
+* Retrieve only token balances for an account:
+  `http://apihost.domain/api/balances/eos/ACCOUNT`
 
 * Retrieve all accounts in all known EOS networks dependent on a public key:
  `http://apihost.domain/api/key/KEY`

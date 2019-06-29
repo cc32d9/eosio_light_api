@@ -213,6 +213,51 @@ sub get_network
     return $r->[0];
 }
 
+
+sub get_balances
+{
+    my $network = shift;
+    my $acc = shift;
+
+    $sth_bal->execute($network, $acc);
+    my $balarray = $sth_bal->fetchall_arrayref({});
+    my $balhash = {};
+    foreach my $row (@{$balarray})
+    {
+        $row->{'amount'} = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
+        $balhash->{$row->{'contract'}}{$row->{'currency'}} = $row;
+    }
+
+    $sth_bal_upd->execute($network, $acc);
+    my $bal_upd = $sth_bal_upd->fetchall_arrayref({});
+    foreach my $row (@{$bal_upd})
+    {
+        if( $row->{'deleted'} )
+        {
+            delete $balhash->{$row->{'contract'}}{$row->{'currency'}};
+        }
+        else
+        {
+            delete $row->{'deleted'};
+            $row->{'amount'} = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
+            $balhash->{$row->{'contract'}}{$row->{'currency'}} = $row;
+        }
+    }
+
+    my $ret = [];
+    foreach my $contract (sort keys %{$balhash})
+    {
+        foreach my $currency (sort keys %{$balhash->{$contract}})
+        {
+            push(@{$ret}, $balhash->{$contract}{$currency});
+        }
+    }
+
+    return $ret;
+}
+
+
+
 # stolen from Bitcoin::Crypto::Base58;
 
 my @alphabet = qw(
@@ -443,39 +488,7 @@ $builder->mount
              $result->{'resources'} = $row;
          }
 
-         $sth_bal->execute($network, $acc);
-         my $balarray = $sth_bal->fetchall_arrayref({});
-         my $balhash = {};
-         foreach my $row (@{$balarray})
-         {
-             $row->{'amount'} = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
-             $balhash->{$row->{'contract'}}{$row->{'currency'}} = $row;
-         }
-
-         $sth_bal_upd->execute($network, $acc);
-         my $bal_upd = $sth_bal_upd->fetchall_arrayref({});
-         foreach my $row (@{$bal_upd})
-         {
-             if( $row->{'deleted'} )
-             {
-                 delete $balhash->{$row->{'contract'}}{$row->{'currency'}};
-             }
-             else
-             {
-                 delete $row->{'deleted'};
-                 $row->{'amount'} = sprintf('%.'.$row->{'decimals'} . 'f', $row->{'amount'});
-                 $balhash->{$row->{'contract'}}{$row->{'currency'}} = $row;
-             }
-         }
-
-         $result->{'balances'} = [];
-         foreach my $contract (sort keys %{$balhash})
-         {
-             foreach my $currency (sort keys %{$balhash->{$contract}})
-             {
-                 push(@{$result->{'balances'}}, $balhash->{$contract}{$currency});
-             }
-         }
+         $result->{'balances'} = get_balances($network, $acc);
 
          $result->{'permissions'} = get_permissions($network, $acc);
 
@@ -611,6 +624,43 @@ $builder->mount
          $res->body($j->encode($result));
          $res->finalize;
      });
+
+
+$builder->mount
+    ('/api/balances' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name and a valid EOS account name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $acc = $2;
+         check_dbserver();
+
+         my $netinfo = get_network($network);
+         if ( not defined($netinfo) ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Unknown network name: ' . $network);
+             return $res->finalize;
+         }
+
+         my $result = {'account_name' => $acc, 'chain' => $netinfo};
+         $result->{'balances'} = get_balances($network, $acc);
+
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
 
 $builder->mount
     ('/api/tokenbalance' => sub {
