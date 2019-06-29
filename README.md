@@ -46,15 +46,15 @@ taking the data.
   all known EOS networks by contract hash.
  
 
+* `http://apihost.domain/api/holdercount/eos/CONTRACT/TOKEN` returns a
+  plaintext integer indicating the number of accounts with positive
+  balance for a specified token.
 
 In addition, adding `?pretty=1` to the URL, you get the resulting JSON
 sorted and formatted for human viewing.
 
 
-
-* `http://apihost.domain/api/holdercount/eos/CONTRACT/TOKEN` returns a
-  plaintext integer indicating the number of accounts with positive
-  balance for a specified token.
+User discussion and support in Telegram: https://t.me/lightapi
 
 
 ## Public endpoints
