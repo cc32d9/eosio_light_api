@@ -12,6 +12,9 @@ taking the data.
 * Retrieve only token balances for an account:
   `http://apihost.domain/api/balances/eos/ACCOUNT`
 
+* Retrieve all account information except token balances:
+  `http://apihost.domain/api/accinfo/eos/ACCOUNT`
+
 * Retrieve all accounts in all known EOS networks dependent on a public key:
  `http://apihost.domain/api/key/KEY`
 

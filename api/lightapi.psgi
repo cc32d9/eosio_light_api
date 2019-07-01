@@ -44,6 +44,10 @@ my $sth_topstake;
 my $sth_searchcode;
 my $sth_sync;
 
+my $json = JSON->new();
+my $jsonp = JSON->new()->pretty->canonical;
+
+
 sub check_dbserver
 {
     if ( not defined($dbh) or not $dbh->ping() ) {
@@ -216,6 +220,7 @@ sub get_network
 
 sub get_balances
 {
+    my $result = shift;
     my $network = shift;
     my $acc = shift;
 
@@ -253,10 +258,133 @@ sub get_balances
         }
     }
 
-    return $ret;
+    $result->{'balances'} = $ret;
 }
 
 
+
+sub get_accinfo
+{
+    my $result = shift;
+    my $network = shift;
+    my $acc = shift;
+
+    {
+        $sth_res->execute($network, $acc);
+        $result->{'resources'} = $sth_res->fetchrow_hashref();
+
+        $sth_res_upd->execute($network, $acc);
+        my $res_upd = $sth_res_upd->fetchall_arrayref({});
+        foreach my $row (@{$res_upd}) {
+            $result->{'resources'} = $row;
+        }
+    }
+    {
+        $result->{'permissions'} = get_permissions($network, $acc);
+
+        $sth_acc_auth_upd->execute($network, $acc);
+        my $auth_upd = $sth_acc_auth_upd->fetchall_arrayref({});
+        foreach my $row (@{$auth_upd}) {
+            my $newperms = [];
+            foreach my $p (@{$result->{'permissions'}}) {
+                if ( $p->{'perm'} ne $row->{'perm'} ) {
+                    push(@{$newperms}, $p);
+                }
+            }
+
+            if ( not $row->{'deleted'} ) {
+                push(@{$newperms}, auth_upd_row_to_perm($row, $json->decode($row->{'jsdata'})));
+            }
+
+            $result->{'permissions'} = $newperms;
+        }
+    }
+    {
+        $sth_linkauth->execute($network, $acc);
+        my $linkauth_rows = $sth_linkauth->fetchall_arrayref({});
+        my %linkauth;
+        foreach my $row (@{$linkauth_rows}) {
+            $linkauth{$row->{'code'}}{$row->{'type'}} = $row;
+        }
+
+        $sth_linkauth_upd->execute($network, $acc);
+        my $linkauth_upd = $sth_linkauth_upd->fetchall_arrayref({});
+        foreach my $row (@{$linkauth_upd}) {
+            if ( $row->{'deleted'} ) {
+                delete $linkauth{$row->{'code'}}{$row->{'type'}};
+            } else {
+                delete $row->{'deleted'};
+                $linkauth{$row->{'code'}}{$row->{'type'}} = $row;
+            }
+        }
+
+        $result->{'linkauth'} = [];
+        foreach my $code (sort keys %linkauth) {
+            foreach my $type (sort keys %{$linkauth{$code}}) {
+                push(@{$result->{'linkauth'}}, $linkauth{$code}{$type});
+            }
+        }
+    }
+    {
+        $sth_delegated_from->execute($network, $acc);
+        my $delfrom = $sth_delegated_from->fetchall_hashref('del_from');
+        $sth_delegated_from_upd->execute($network, $acc);
+        my $del_from_upd = $sth_delegated_from_upd->fetchall_arrayref({});
+        foreach my $row (@{$del_from_upd}) {
+            if ( $row->{'deleted'} ) {
+                delete $delfrom->{$row->{'del_from'}};
+            } else {
+                delete $row->{'deleted'};
+                $delfrom->{$row->{'del_from'}} = $row;
+            }
+        }
+
+        $result->{'delegated_from'} = [];
+        foreach my $name (sort keys %{$delfrom}) {
+            push(@{$result->{'delegated_from'}}, $delfrom->{$name});
+        }
+    }
+    {
+        $sth_delegated_to->execute($network, $acc);
+        my $delto = $sth_delegated_to->fetchall_hashref('account_name');
+        $sth_delegated_to_upd->execute($network, $acc);
+        my $del_to_upd = $sth_delegated_to_upd->fetchall_arrayref({});
+        foreach my $row (@{$del_to_upd}) {
+            if ( $row->{'deleted'} ) {
+                delete $delto->{$row->{'account_name'}};
+            } else {
+                delete $row->{'deleted'};
+                $delto->{$row->{'account_name'}} = $row;
+            }
+        }
+
+        $result->{'delegated_to'} = [];
+        foreach my $name (sort keys %{$delto}) {
+            push(@{$result->{'delegated_to'}}, $delto->{$name});
+        }
+    }
+    {
+        $sth_get_code->execute($network, $acc);
+        my $r = $sth_get_code->fetchall_arrayref({});
+        if ( scalar(@{$r}) > 0 ) {
+            $result->{'code'} = $r->[0];
+        }
+
+        $sth_get_code_upd->execute($network, $acc);
+        my $code_upd = $sth_get_code_upd->fetchall_arrayref({});
+        foreach my $row (@{$code_upd}) {
+            if ( $row->{'deleted'} ) {
+                delete $result->{'code'};
+            } else {
+                delete $row->{'deleted'};
+                $result->{'code'} = $row;
+            }
+        }
+    }
+}
+
+
+    
 
 # stolen from Bitcoin::Crypto::Base58;
 
@@ -431,8 +559,6 @@ sub auth_upd_row_to_perm
 }
 
 
-my $json = JSON->new();
-my $jsonp = JSON->new()->pretty->canonical;
 
 my $builder = Plack::Builder->new;
 
@@ -478,145 +604,9 @@ $builder->mount
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
 
-         $sth_res->execute($network, $acc);
-         $result->{'resources'} = $sth_res->fetchrow_hashref();
+         get_accinfo($result, $network, $acc);
+         get_balances($result, $network, $acc);
 
-         $sth_res_upd->execute($network, $acc);
-         my $res_upd = $sth_res_upd->fetchall_arrayref({});
-         foreach my $row (@{$res_upd})
-         {
-             $result->{'resources'} = $row;
-         }
-
-         $result->{'balances'} = get_balances($network, $acc);
-
-         $result->{'permissions'} = get_permissions($network, $acc);
-
-         $sth_acc_auth_upd->execute($network, $acc);
-         my $auth_upd = $sth_acc_auth_upd->fetchall_arrayref({});
-         foreach my $row (@{$auth_upd})
-         {
-             my $newperms = [];
-             foreach my $p (@{$result->{'permissions'}})
-             {
-                 if( $p->{'perm'} ne $row->{'perm'} )
-                 {
-                     push(@{$newperms}, $p);
-                 }
-             }
-
-             if( not $row->{'deleted'} )
-             {
-                 push(@{$newperms}, auth_upd_row_to_perm($row, $json->decode($row->{'jsdata'})));
-             }
-
-             $result->{'permissions'} = $newperms;
-         }
-
-         $sth_linkauth->execute($network, $acc);
-         my $linkauth_rows = $sth_linkauth->fetchall_arrayref({});
-         my %linkauth;
-         foreach my $row (@{$linkauth_rows})
-         {
-             $linkauth{$row->{'code'}}{$row->{'type'}} = $row;
-         }
-
-         $sth_linkauth_upd->execute($network, $acc);
-         my $linkauth_upd = $sth_linkauth_upd->fetchall_arrayref({});
-         foreach my $row (@{$linkauth_upd})
-         {
-             if( $row->{'deleted'} )
-             {
-                 delete $linkauth{$row->{'code'}}{$row->{'type'}};
-             }
-             else
-             {
-                 delete $row->{'deleted'};
-                 $linkauth{$row->{'code'}}{$row->{'type'}} = $row;
-             }
-         }
-
-         $result->{'linkauth'} = [];
-         foreach my $code (sort keys %linkauth)
-         {
-             foreach my $type (sort keys %{$linkauth{$code}})
-             {
-                 push(@{$result->{'linkauth'}}, $linkauth{$code}{$type});
-             }
-         }
-
-         {
-             $sth_delegated_from->execute($network, $acc);
-             my $delfrom = $sth_delegated_from->fetchall_hashref('del_from');
-             $sth_delegated_from_upd->execute($network, $acc);
-             my $del_from_upd = $sth_delegated_from_upd->fetchall_arrayref({});
-             foreach my $row (@{$del_from_upd})
-             {
-                 if( $row->{'deleted'} )
-                 {
-                     delete $delfrom->{$row->{'del_from'}};
-                 }
-                 else
-                 {
-                     delete $row->{'deleted'};
-                     $delfrom->{$row->{'del_from'}} = $row;
-                 }
-             }
-
-             $result->{'delegated_from'} = [];
-             foreach my $name (sort keys %{$delfrom})
-             {
-                 push(@{$result->{'delegated_from'}}, $delfrom->{$name});
-             }
-         }
-
-         {
-             $sth_delegated_to->execute($network, $acc);
-             my $delto = $sth_delegated_to->fetchall_hashref('account_name');
-             $sth_delegated_to_upd->execute($network, $acc);
-             my $del_to_upd = $sth_delegated_to_upd->fetchall_arrayref({});
-             foreach my $row (@{$del_to_upd})
-             {
-                 if( $row->{'deleted'} )
-                 {
-                     delete $delto->{$row->{'account_name'}};
-                 }
-                 else
-                 {
-                     delete $row->{'deleted'};
-                     $delto->{$row->{'account_name'}} = $row;
-                 }
-             }
-
-             $result->{'delegated_to'} = [];
-             foreach my $name (sort keys %{$delto})
-             {
-                 push(@{$result->{'delegated_to'}}, $delto->{$name});
-             }
-         }
-
-
-         $sth_get_code->execute($network, $acc);
-         my $r = $sth_get_code->fetchall_arrayref({});
-         if( scalar(@{$r}) > 0 )
-         {
-             $result->{'code'} = $r->[0];
-         }
-
-         $sth_get_code_upd->execute($network, $acc);
-         my $code_upd = $sth_get_code_upd->fetchall_arrayref({});
-         foreach my $row (@{$code_upd})
-         {
-             if( $row->{'deleted'} )
-             {
-                 delete $result->{'code'};
-             }
-             else
-             {
-                 delete $row->{'deleted'};
-                 $result->{'code'} = $row;
-             }
-         }
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
@@ -624,6 +614,44 @@ $builder->mount
          $res->body($j->encode($result));
          $res->finalize;
      });
+
+
+$builder->mount
+    ('/api/accinfo' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name and a valid EOS account name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $acc = $2;
+         check_dbserver();
+
+         my $netinfo = get_network($network);
+         if ( not defined($netinfo) ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Unknown network name: ' . $network);
+             return $res->finalize;
+         }
+
+         my $result = {'account_name' => $acc, 'chain' => $netinfo};
+
+         get_accinfo($result, $network, $acc);
+
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
 
 
 $builder->mount
@@ -652,7 +680,7 @@ $builder->mount
          }
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
-         $result->{'balances'} = get_balances($network, $acc);
+         get_balances($result, $network, $acc);
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
