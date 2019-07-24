@@ -3,8 +3,15 @@
 ## API description
 
 The API is providing information about EOSIO blockchain accounts and
-token balances. Here "eos" is the name of the network where API is
+token balances. It is deployed for several blockchains, such as EOS,
+Telos, BOS, WAX, and Europechain. Also an endpoint for Jungle testnet is
+available.
+
+In below examples, "eos" stands for the name of the network where API is
 taking the data.
+
+* `http://apihost.domain/api/networks` lists all known networks and
+  their information.
 
 * Retrieve all token balances, resources and authorization information
  for an account: `http://apihost.domain/api/account/eos/ACCOUNT`
@@ -17,9 +24,6 @@ taking the data.
 
 * Retrieve all accounts in all known EOS networks dependent on a public key:
  `http://apihost.domain/api/key/KEY`
-
-* `http://apihost.domain/api/networks` lists all known networks and
-  their information.
 
 * `http://apihost.domain/api/sync/eos` returns a plain text with delay
   in seconds that this server's blockchain database is behind the real
@@ -79,6 +83,7 @@ following links:
 
 * EOS Amsterdam and Newdex: development of Version 2.
 
+* EOS Amsterdam: hosting for BOS, WAX and Europechain.
 
 ## Installation
 
