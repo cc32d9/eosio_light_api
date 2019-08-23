@@ -57,12 +57,14 @@ sub check_dbserver
         die($DBI::errstr) unless $dbh;
 
         $sth_allnetworks = $dbh->prepare
-            ('SELECT network, chainid, description, systoken, decimals, production ' .
-             'FROM NETWORKS');
+            ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' .
+             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync ' .
+             'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network');
 
         $sth_getnet = $dbh->prepare
-            ('SELECT network, chainid, description, systoken, decimals, production ' .
-             'FROM NETWORKS WHERE network=?');
+            ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' .
+             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync ' .
+             'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network WHERE NETWORKS.network=?');
 
         $sth_res = $dbh->prepare
             ('SELECT block_num, block_time, ' .
