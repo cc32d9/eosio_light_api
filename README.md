@@ -75,15 +75,24 @@ following links:
 
 ## Project sponsors
 
-* GetScatter (https://get-scatter.com/): engineering, hosting and maintenance.
+* [GetScatter](https://get-scatter.com/): engineering, hosting and
+  maintenance.
 
-* EOS Cafe Block (https://www.eoscafeblock.com/): new features.
+* [EOS Cafe Block](https://www.eoscafeblock.com/): new features.
 
-* Telos community: development of additional features in Chronicle.
+* [Telos community](https://telosfoundation.io/): development of
+  additional features in Chronicle.
 
-* EOS Amsterdam and Newdex: development of Version 2.
+* [EOS Amsterdam](https://eosamsterdam.net/) and
+  [Newdex](https://newdex.io/): development of Version 2.
 
-* EOS Amsterdam: hosting for BOS, WAX and Europechain.
+* [EOS Amsterdam](https://eosamsterdam.net/): hosting for BOS, WAX,
+  Europechain, Eorbli and Instar.
+
+* [Worbli](https://worbli.io/) and [EOS
+  Amsterdam](https://eosamsterdam.net/): Hosting and maintenance of
+  service in Singapore.
+  
 
 ## Installation
 
