@@ -87,10 +87,10 @@ following links:
   [Newdex](https://newdex.io/): development of Version 2.
 
 * [EOS Amsterdam](https://eosamsterdam.net/): hosting for BOS, WAX,
-  Europechain, Eorbli and Instar.
+  Europechain, Worbli and Instar blockchains.
 
 * [Worbli](https://worbli.io/) and [EOS
-  Amsterdam](https://eosamsterdam.net/): Hosting and maintenance of
+  Amsterdam](https://eosamsterdam.net/): hosting and maintenance of
   service in Singapore.
   
 
