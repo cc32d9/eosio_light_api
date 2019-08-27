@@ -252,3 +252,16 @@ CREATE TABLE UPD_USERRES
 
 CREATE INDEX UPD_USERRES_I01 ON UPD_USERRES (network, block_num);
 CREATE INDEX UPD_USERRES_I02 ON UPD_USERRES (network, account_name);
+
+
+
+CREATE TABLE HOLDERCOUNTS
+(
+ network           VARCHAR(15) NOT NULL,
+ contract          VARCHAR(13) NOT NULL,
+ currency          VARCHAR(8) NOT NULL,
+ holders           BIGINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE UNIQUE INDEX HOLDERCOUNTS_I01 ON HOLDERCOUNTS (network, contract, currency);
+

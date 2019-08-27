@@ -40,6 +40,10 @@ taking the data.
   of (account, amount) pairs. NUM must not be less than 10 or more than
   1000.
 
+* `http://apihost.domain/api/holdercount/eos/CONTRACT/TOKEN` returns the
+  total count of token holders as plain text. The result is "0" if the
+  token does not exist.
+
 * `http://apihost.domain/api/usercount/eos`
   returns a plain text with total number of accounts in the network.
 
@@ -93,6 +97,7 @@ following links:
   Amsterdam](https://eosamsterdam.net/): hosting and maintenance of
   service in Singapore.
   
+* [SOV](https://www.soveos.one/): new features.
 
 ## Installation
 
@@ -125,6 +130,12 @@ sh install_systemd_api.sh
 
 # Now Starman is serving HTTP requests and you can build your HTTP service
 # with nginx or exposing Starman directly
+
+
+# Cron job for token holder counts
+cat >/etc/cron.d/lightapi <<'EOT'
+*/5 * * * * root perl /opt/eosio_light_api/scripts/lightapi_holdercounts.pl
+EOT
 ```
 
 
