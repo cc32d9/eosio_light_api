@@ -228,6 +228,36 @@ sub process_data
             }
         }
     }
+    elsif( $msgtype == 1011 ) # CHRONICLE_MSGTYPE_PERMISSION
+    {
+        my $permission = $data->{'permission'};
+        my $block_num = $data->{'block_num'};
+        my $block_time = $data->{'block_timestamp'};
+
+        if( $data->{'added'} eq 'true' )
+        {
+            $db->{'sth_upd_auth'}->execute
+                ($network, $permission->{'owner'}, $block_num, $block_time,
+                 $permission->{'name'}, $permission->{'parent'},
+                 $json->encode($permission->{'auth'}), 0);
+        }
+        else
+        {
+            $db->{'sth_upd_auth'}->execute
+                ($network, $permission->{'owner'}, $block_num, $block_time,
+                 $permission->{'name'}, $permission->{'parent'}, '{}', 1);
+        }
+    }
+    elsif( $msgtype == 1012 ) # CHRONICLE_MSGTYPE_PERMISSION_LINK
+    {
+        my $block_num = $data->{'block_num'};
+        my $block_time = $data->{'block_timestamp'};
+        $db->{'sth_upd_linkauth'}->execute
+            ($network,
+             map({$data->{'permission_link'}{$_}} qw(account code message_type required_permission)),
+             $block_num, $block_time, ($data->{'added'} eq 'true')?0:1);
+
+    }
     elsif( $msgtype == 1009 ) # CHRONICLE_MSGTYPE_RCVR_PAUSE
     {
         if( $unconfirmed_block > $confirmed_block )
@@ -296,7 +326,7 @@ sub process_data
                 {
                     my $auth = $json->decode($r->{'jsdata'});
                     $db->{'sth_save_auth_thres'}->execute
-                        (@arg, $auth->{'threshold'}, $r->{'block_num'},$r->{'block_time'});
+                        (@arg, $auth->{'threshold'}, $r->{'parent'}, $r->{'block_num'},$r->{'block_time'});
                     
                     foreach my $keydata (@{$auth->{'keys'}})
                     {
@@ -469,36 +499,7 @@ sub process_eosio_trace
 
     return if (ref($data) ne 'HASH');
 
-    if( $aname eq 'newaccount' )
-    {
-        my $name = $data->{'name'};
-        if( not defined($name) )
-        {
-            # workaround for https://github.com/EOSIO/eosio.contracts/pull/129
-            $name = $data->{'newact'};
-        }
-        
-        $db->{'sth_upd_auth'}->execute
-            ($network, $name, $block_num, $block_time, 'owner',
-             $json->encode($data->{'owner'}), 0);
-        
-        $db->{'sth_upd_auth'}->execute
-            ($network, $name, $block_num, $block_time, 'active',
-             $json->encode($data->{'active'}), 0);
-    }
-    elsif( $aname eq 'updateauth' )
-    {
-        $db->{'sth_upd_auth'}->execute
-            ($network, $data->{'account'}, $block_num, $block_time,
-             $data->{'permission'}, $json->encode($data->{'auth'}), 0);
-    }
-    elsif( $aname eq 'deleteauth' )
-    {
-        $db->{'sth_upd_auth'}->execute
-            ($network, $data->{'account'}, $block_num, $block_time,
-             $data->{'permission'}, '{}', 1);
-    }
-    elsif( $aname eq 'setcode' )
+    if( $aname eq 'setcode' )
     {
         my $hash = '';
         my $deleted = 1;
@@ -512,18 +513,6 @@ sub process_eosio_trace
         $db->{'sth_upd_codehash'}->execute
             ($network, $data->{'account'}, $block_num, $block_time,
              $hash, $deleted);
-    }
-    elsif( $aname eq 'linkauth' )
-    {
-        $db->{'sth_upd_linkauth'}->execute
-            ($network, map({$data->{$_}} qw(account code type requirement)),
-             $block_num, $block_time, 0);
-    }
-    elsif( $aname eq 'unlinkauth' )
-    {
-        $db->{'sth_upd_linkauth'}->execute
-            ($network, map({$data->{$_}} qw(account code type)), '',
-             $block_num, $block_time, 1);
     }
 }
 
@@ -570,8 +559,8 @@ sub getdb
 
     $db->{'sth_upd_auth'} = $dbh->prepare
         ('INSERT INTO UPD_AUTH ' . 
-         '(network, account_name, block_num, block_time, perm, jsdata, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?)');
+         '(network, account_name, block_num, block_time, perm, parent, jsdata, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?)');
 
     $db->{'sth_upd_delband'} = $dbh->prepare
         ('INSERT INTO UPD_DELBAND ' . 
@@ -620,7 +609,7 @@ sub getdb
 
     
     $db->{'sth_get_upd_auth'} = $dbh->prepare
-        ('SELECT account_name, block_num, block_time, perm, jsdata, deleted ' .
+        ('SELECT account_name, block_num, block_time, perm, parent, jsdata, deleted ' .
          'FROM UPD_AUTH WHERE network = ? AND block_num <= ? ORDER BY id');
 
     $db->{'sth_erase_auth_thres'} = $dbh->prepare
@@ -637,8 +626,8 @@ sub getdb
 
     $db->{'sth_save_auth_thres'} = $dbh->prepare
         ('INSERT INTO AUTH_THRESHOLDS ' .
-         '(network, account_name, perm, threshold, block_num, block_time) ' .
-         'VALUES(?,?,?,?,?,?)');
+         '(network, account_name, perm, threshold, parent, block_num, block_time) ' .
+         'VALUES(?,?,?,?,?,?,?)');
 
     $db->{'sth_save_auth_keys'} = $dbh->prepare
         ('INSERT INTO AUTH_KEYS ' .

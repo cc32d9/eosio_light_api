@@ -51,6 +51,7 @@ CREATE TABLE AUTH_THRESHOLDS
  account_name      VARCHAR(13) NOT NULL,
  perm              VARCHAR(13) NOT NULL,
  threshold         INT NOT NULL,
+ parent            VARCHAR(13) NOT NULL,
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL
 ) ENGINE=InnoDB;
@@ -85,6 +86,17 @@ CREATE TABLE AUTH_ACC
 CREATE UNIQUE INDEX AUTH_ACC_I01 ON AUTH_ACC (network, account_name, perm, actor, permission);
 CREATE INDEX AUTH_ACC_I02 ON AUTH_ACC (network, actor);
 
+
+CREATE TABLE AUTH_WAITS
+(
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ perm              VARCHAR(13) NOT NULL,
+ wait              INT NOT NULL,
+ weight            INT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX AUTH_WAITS_I01 ON AUTH_WAITS (network, account_name, perm);
 
 
 CREATE TABLE LINKAUTH
@@ -176,6 +188,7 @@ CREATE TABLE UPD_AUTH
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,
  perm              VARCHAR(13) NOT NULL,
+ parent            VARCHAR(13) NOT NULL,
  jsdata            BLOB NOT NULL,
  deleted           TINYINT NOT NULL
 ) ENGINE=InnoDB;
