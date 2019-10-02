@@ -321,6 +321,7 @@ sub process_data
                 $db->{'sth_erase_auth_thres'}->execute(@arg);
                 $db->{'sth_erase_auth_keys'}->execute(@arg);
                 $db->{'sth_erase_auth_acc'}->execute(@arg);
+                $db->{'sth_erase_auth_waits'}->execute(@arg);
 
                 if( not $r->{'deleted'} )
                 {
@@ -339,6 +340,12 @@ sub process_data
                         $db->{'sth_save_auth_acc'}->execute
                             (@arg, $accdata->{'permission'}{'actor'},
                              $accdata->{'permission'}{'permission'}, $accdata->{'weight'});
+                    }
+                    
+                    foreach my $wdata (@{$auth->{'waits'}})
+                    {
+                        $db->{'sth_save_auth_waits'}->execute
+                            (@arg, $wdata->{'wait_sec'}, $wdata->{'weight'});
                     }
                 }
             }
@@ -624,6 +631,10 @@ sub getdb
         ('DELETE FROM AUTH_ACC WHERE ' .
          'network=? AND account_name=? AND perm=?');
 
+    $db->{'sth_erase_auth_waits'} = $dbh->prepare
+        ('DELETE FROM AUTH_WAITS WHERE ' .
+         'network=? AND account_name=? AND perm=?');
+
     $db->{'sth_save_auth_thres'} = $dbh->prepare
         ('INSERT INTO AUTH_THRESHOLDS ' .
          '(network, account_name, perm, threshold, parent, block_num, block_time) ' .
@@ -639,6 +650,11 @@ sub getdb
          '(network, account_name, perm, actor, permission, weight) ' .
          'VALUES(?,?,?,?,?,?)');
 
+    $db->{'sth_save_auth_waits'} = $dbh->prepare
+        ('INSERT INTO AUTH_WAITS ' .
+         '(network, account_name, perm, wait, weight) ' .
+         'VALUES(?,?,?,?,?)');
+    
     $db->{'sth_del_upd_auth'} = $dbh->prepare
         ('DELETE FROM UPD_AUTH WHERE network = ? AND block_num <= ?');
 
