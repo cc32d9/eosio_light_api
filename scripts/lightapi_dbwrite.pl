@@ -21,16 +21,13 @@ my $dsn = 'DBI:MariaDB:database=lightapi;host=localhost';
 my $db_user = 'lightapi';
 my $db_password = 'ce1Shish';
 
-my $pre18;
-
 my $ok = GetOptions
     ('network=s' => \$network,
      'port=i'    => \$port,
      'ack=i'     => \$ack_every,     
      'dsn=s'     => \$dsn,
      'dbuser=s'  => \$db_user,
-     'dbpw=s'    => \$db_password,
-     'pre18'     => \$pre18);
+     'dbpw=s'    => \$db_password);
 
 
 if( not $ok or scalar(@ARGV) > 0 or not $network )
@@ -43,8 +40,7 @@ if( not $ok or scalar(@ARGV) > 0 or not $network )
     "  --network=NAME     name of EOS network\n",
     "  --dsn=DSN          \[$dsn\]\n",
     "  --dbuser=USER      \[$db_user\]\n",
-    "  --dbpw=PASSWORD    \[$db_password\]\n",
-    "  --pre18            nodeos prior to version 1.8\n";
+    "  --dbpw=PASSWORD    \[$db_password\]\n";
     exit 1;
 }
 
@@ -202,32 +198,6 @@ sub process_data
             }
         }
     }
-    elsif( $msgtype == 1003 ) # CHRONICLE_MSGTYPE_TX_TRACE
-    {
-        my $trace = $data->{'trace'};
-        if( $trace->{'status'} eq 'executed' )
-        {
-            my $block_num = $data->{'block_num'};
-            my $block_time = $data->{'block_timestamp'};
-            $block_time =~ s/T/ /;
-
-            if( $pre18 )
-            {
-                process_pre18_traces($trace->{'traces'}, $block_num, $block_time);
-            }
-            else
-            {
-                foreach my $atrace ( @{$trace->{'action_traces'}} )
-                {
-                    my $act = $atrace->{'act'};
-                    if( $atrace->{'receipt'}{'receiver'} eq 'eosio' and $act->{'account'} eq 'eosio' )
-                    {
-                        process_eosio_trace($act->{'name'}, $act->{'data'}, $block_num, $block_time);
-                    }
-                }
-            }
-        }
-    }
     elsif( $msgtype == 1011 ) # CHRONICLE_MSGTYPE_PERMISSION
     {
         my $permission = $data->{'permission'};
@@ -256,6 +226,25 @@ sub process_data
             ($network,
              map({$data->{'permission_link'}{$_}} qw(account code message_type required_permission)),
              $block_num, $block_time, ($data->{'added'} eq 'true')?0:1);
+
+    }
+    elsif( $msgtype == 1013 ) # CHRONICLE_MSGTYPE_ACC_METADATTA
+    {
+        my $block_num = $data->{'block_num'};
+        my $block_time = $data->{'block_timestamp'};
+
+        my $hash = '';
+        my $deleted = 1;
+
+        if( defined($data->{'account_metadata'}{'code_metadata'}) )
+        {
+            $hash = $data->{'account_metadata'}{'code_metadata'}{'code_hash'};
+            $deleted = 0;
+        }
+            
+        $db->{'sth_upd_codehash'}->execute
+            ($network, $data->{'account_metadata'}{'name'}, $block_num, $block_time,
+             $hash, $deleted);
 
     }
     elsif( $msgtype == 1009 ) # CHRONICLE_MSGTYPE_RCVR_PAUSE
@@ -475,53 +464,9 @@ sub process_data
 
 
 
-sub process_pre18_traces
-{
-    my $traces = shift;
-    my $block_num = shift;
-    my $block_time = shift;
-
-    foreach my $atrace (@{$traces})
-    {
-        if( $atrace->{'receipt'}{'receiver'} eq 'eosio' and $atrace->{'account'} eq 'eosio' )
-        {
-            process_eosio_trace($atrace->{'name'}, $atrace->{'data'}, $block_num, $block_time);
-        }
-
-        if( defined($atrace->{'inline_traces'}) )
-        {
-            process_pre18_traces($atrace->{'inline_traces'}, $block_num, $block_time);
-        }
-    }
-}
 
 
 
-sub process_eosio_trace
-{
-    my $aname = shift;
-    my $data = shift;
-    my $block_num = shift;
-    my $block_time = shift;
-
-    return if (ref($data) ne 'HASH');
-
-    if( $aname eq 'setcode' )
-    {
-        my $hash = '';
-        my $deleted = 1;
-        
-        if( length($data->{'code'}) > 0 )
-        {
-            $hash = sha256_hex(pack('H*', $data->{'code'}));
-            $deleted = 0;
-        }
-        
-        $db->{'sth_upd_codehash'}->execute
-            ($network, $data->{'account'}, $block_num, $block_time,
-             $hash, $deleted);
-    }
-}
 
         
 
