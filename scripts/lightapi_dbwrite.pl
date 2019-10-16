@@ -13,7 +13,7 @@ $Protocol::WebSocket::Frame::MAX_FRAGMENTS_AMOUNT = 102400;
 $| = 1;
 
 my $port = 8800;
-my $ack_every = 120;
+my $ack_every = 10;
 
 my $network;
 
