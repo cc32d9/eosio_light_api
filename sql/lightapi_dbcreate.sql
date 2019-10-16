@@ -157,6 +157,49 @@ CREATE UNIQUE INDEX USERRES_I01 ON USERRES (network, account_name);
 CREATE INDEX USERRES_I02 ON USERRES (network, ram_bytes);
 CREATE INDEX USERRES_I03 ON USERRES (network, weight_sum);
 
+/* in REX balances, we assume it's 4 decimals because it's hardcoded in system contract */
+
+CREATE TABLE REXFUND
+(
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ balance           DOUBLE PRECISION NOT NULL
+) ENGINE=InnoDB;
+
+CREATE UNIQUE INDEX REXFUND_I01 ON REXFUND (network, account_name);
+
+
+CREATE TABLE REXBAL
+ (
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ vote_stake        DOUBLE PRECISION NOT NULL,
+ rex_balance       DOUBLE PRECISION NOT NULL,
+ matured_rex       BIGINT UNSIGNED NOT NULL,
+ rex_maturities    BLOB NOT NULL
+) ENGINE=InnoDB;
+
+CREATE UNIQUE INDEX REXBAL_I01 ON REXBAL (network, account_name);
+
+
+CREATE TABLE REXPOOL
+ (
+ network           VARCHAR(15) NOT NULL PRIMARY KEY,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ total_lent        DOUBLE PRECISION NOT NULL,
+ total_unlent      DOUBLE PRECISION NOT NULL,
+ total_rent        DOUBLE PRECISION NOT NULL,
+ total_lendable    DOUBLE PRECISION NOT NULL,
+ total_rex         DOUBLE PRECISION NOT NULL,
+ namebid_proceeds  DOUBLE PRECISION NOT NULL,
+ loan_num          BIGINT UNSIGNED NOT NULL
+) ENGINE=InnoDB;
+
 
 
 /* ------ Queues of updates before they become irreversible ------ */
@@ -265,6 +308,63 @@ CREATE TABLE UPD_USERRES
 
 CREATE INDEX UPD_USERRES_I01 ON UPD_USERRES (network, block_num);
 CREATE INDEX UPD_USERRES_I02 ON UPD_USERRES (network, account_name);
+
+
+CREATE TABLE UPD_REXFUND
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ balance           DOUBLE PRECISION NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_REXFUND_I01 ON UPD_REXFUND (network, block_num);
+CREATE INDEX UPD_REXFUND_I02 ON UPD_REXFUND (network, account_name);
+
+
+
+CREATE TABLE UPD_REXBAL
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ account_name      VARCHAR(13) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ vote_stake        DOUBLE PRECISION NOT NULL,
+ rex_balance       DOUBLE PRECISION NOT NULL,
+ matured_rex       BIGINT UNSIGNED NOT NULL,
+ rex_maturities    BLOB NOT NULL,
+ deleted           TINYINT NOT NULL
+) ENGINE=InnoDB;
+
+CREATE INDEX UPD_REXBAL_I01 ON UPD_REXBAL (network, block_num);
+CREATE INDEX UPD_REXBAL_I02 ON UPD_REXBAL (network, account_name);
+
+
+
+CREATE TABLE UPD_REXPOOL
+(
+ id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ network           VARCHAR(15) NOT NULL,
+ block_num         BIGINT NOT NULL,
+ block_time        DATETIME NOT NULL,
+ total_lent        DOUBLE PRECISION NOT NULL,
+ total_unlent      DOUBLE PRECISION NOT NULL,
+ total_rent        DOUBLE PRECISION NOT NULL,
+ total_lendable    DOUBLE PRECISION NOT NULL,
+ total_rex         DOUBLE PRECISION NOT NULL,
+ namebid_proceeds  DOUBLE PRECISION NOT NULL,
+ loan_num          BIGINT UNSIGNED NOT NULL
+) ENGINE=InnoDB;
+
+
+CREATE INDEX UPD_REXPOOL_I01 ON UPD_REXPOOL (network, block_num);
+
+
+/* ------ tables updated by cron jobs ------ */
 
 
 

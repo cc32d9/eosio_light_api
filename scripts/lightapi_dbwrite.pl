@@ -45,9 +45,9 @@ if( not $ok or scalar(@ARGV) > 0 or not $network )
 }
 
 our $db;
-my $json = JSON->new;
+my $json = JSON->new->canonical;
 
-my $presicion;
+my $precision;
 
 my $confirmed_block = 0;
 my $unconfirmed_block = 0;
@@ -61,7 +61,7 @@ getdb();
     my $r = $sth->fetchall_arrayref();
     die("Unknown network: $network") if scalar(@{$r}) == 0;
     my $decimals = $r->[0][0];
-    $presicion = 10**$decimals;
+    $precision = 10**$decimals;
 }
 {
     my $sth = $db->{'dbh'}->prepare
@@ -132,6 +132,9 @@ sub process_data
         $db->{'sth_fork_delband'}->execute($network, $block_num);
         $db->{'sth_fork_codehash'}->execute($network, $block_num);
         $db->{'sth_fork_userres'}->execute($network, $block_num);
+        $db->{'sth_fork_rexfund'}->execute($network, $block_num);
+        $db->{'sth_fork_rexbal'}->execute($network, $block_num);
+        $db->{'sth_fork_rexpool'}->execute($network, $block_num);
         $db->{'dbh'}->commit();
         $confirmed_block = $block_num-1;
         $unconfirmed_block = $block_num-1;
@@ -180,7 +183,7 @@ sub process_data
                     
                     $db->{'sth_upd_delband'}->execute
                         ($network, $kvo->{'value'}{'to'}, $data->{'block_num'}, $block_time,
-                         $kvo->{'value'}{'from'}, $cpu*$presicion, $net*$presicion,
+                         $kvo->{'value'}{'from'}, $cpu*$precision, $net*$precision,
                          ($data->{'added'} eq 'true')?0:1);
                 }
                 elsif( $kvo->{'table'} eq 'userres' )
@@ -192,7 +195,46 @@ sub process_data
                     
                     $db->{'sth_upd_userres'}->execute
                         ($network, $kvo->{'value'}{'owner'}, $data->{'block_num'}, $block_time,
-                         $cpu*$presicion, $net*$presicion, $kvo->{'value'}{'ram_bytes'},
+                         $cpu*$precision, $net*$precision, $kvo->{'value'}{'ram_bytes'},
+                         ($data->{'added'} eq 'true')?0:1);
+                }
+                elsif( $kvo->{'table'} eq 'rexfund' )
+                {
+                    my ($bal, $curr1) = split(/\s/, $kvo->{'value'}{'balance'});
+                    my $block_time = $data->{'block_timestamp'};
+                    $block_time =~ s/T/ /;
+                    
+                    $db->{'sth_upd_rexfund'}->execute
+                        ($network, $kvo->{'value'}{'owner'}, $data->{'block_num'}, $block_time,
+                         $bal, ($data->{'added'} eq 'true')?0:1);
+                }
+                elsif( $kvo->{'table'} eq 'rexbal' )
+                {
+                    my ($vbal, $curr1) = split(/\s/, $kvo->{'value'}{'vote_stake'});
+                    my ($rbal, $curr2) = split(/\s/, $kvo->{'value'}{'rex_balance'});
+                    my $block_time = $data->{'block_timestamp'};
+                    $block_time =~ s/T/ /;
+                    
+                    $db->{'sth_upd_rexbal'}->execute
+                        ($network, $kvo->{'value'}{'owner'}, $data->{'block_num'}, $block_time,
+                         $vbal, $rbal, $kvo->{'value'}{'matured_rex'},
+                         $json->encode($kvo->{'value'}{'rex_maturities'}),
+                         ($data->{'added'} eq 'true')?0:1);
+                }
+                elsif( $kvo->{'table'} eq 'rexpool' )
+                {
+                    my ($tlent, $curr1) = split(/\s/, $kvo->{'value'}{'total_lent'});
+                    my ($tunlent, $curr2) = split(/\s/, $kvo->{'value'}{'total_unlent'});
+                    my ($trent, $curr3) = split(/\s/, $kvo->{'value'}{'total_rent'});
+                    my ($tlendable, $curr4) = split(/\s/, $kvo->{'value'}{'total_lendable'});
+                    my ($trex, $curr5) = split(/\s/, $kvo->{'value'}{'total_rex'});
+                    my ($nbid, $curr6) = split(/\s/, $kvo->{'value'}{'namebid_proceeds'});
+                    my $block_time = $data->{'block_timestamp'};
+                    $block_time =~ s/T/ /;
+                    
+                    $db->{'sth_upd_rexpool'}->execute
+                        ($network, $data->{'block_num'}, $block_time,
+                         $tlent, $tunlent, $tlendable, $trex, $nbid, $kvo->{'value'}{'loan_num'},
                          ($data->{'added'} eq 'true')?0:1);
                 }
             }
@@ -449,6 +491,76 @@ sub process_data
                 $db->{'dbh'}->commit();
             }
 
+            ## rexfund
+            $changes = 0;
+            $db->{'sth_get_upd_rexfund'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_rexfund'}->fetchrow_hashref('NAME_lc'))
+            {
+                $changes = 1;
+                if( $r->{'deleted'} )
+                {
+                    $db->{'sth_erase_rexfund'}->execute($network, $r->{'account_name'});
+                }
+                else
+                {
+                    $db->{'sth_save_rexfund'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(account_name block_num block_time balance block_num block_time balance));
+                }
+            }
+
+            if( $changes )
+            {
+                $db->{'sth_del_upd_rexfund'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
+
+            ## rexbal
+            $changes = 0;
+            $db->{'sth_get_upd_rexbal'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_rexbal'}->fetchrow_hashref('NAME_lc'))
+            {
+                $changes = 1;
+                if( $r->{'deleted'} )
+                {
+                    $db->{'sth_erase_rexbal'}->execute($network, $r->{'account_name'});
+                }
+                else
+                {
+                    $db->{'sth_save_rexbal'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(account_name block_num block_time vote_stake rex_balance matured_rex
+                         rex_maturities block_num block_time vote_stake rex_balance matured_rex
+                         rex_maturities));
+                }
+            }
+
+            if( $changes )
+            {
+                $db->{'sth_del_upd_rexbal'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
+
+            ## rexpool
+            $changes = 0;
+            $db->{'sth_get_upd_rexpool'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_rexpool'}->fetchrow_hashref('NAME_lc'))
+            {
+                $changes = 1;
+                $db->{'sth_save_rexpool'}->execute
+                    ($network, map {$r->{$_}}
+                     qw(block_num block_time total_lent total_unlent total_rent total_lendable
+                     total_rex namebid_proceeds loan_num
+                     block_num block_time total_lent total_unlent total_rent total_lendable
+                     total_rex namebid_proceeds loan_num));
+            }
+
+            if( $changes )
+            {
+                $db->{'sth_del_upd_rexpool'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
+            
             $irreversible = $last_irreversible;
         }                   
         
@@ -501,8 +613,16 @@ sub getdb
         ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
 
     $db->{'sth_fork_userres'} = $dbh->prepare
-        ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
+        ('DELETE FROM UPD_USERRES WHERE network = ? AND block_num >= ? ');
 
+    $db->{'sth_fork_rexfund'} = $dbh->prepare
+        ('DELETE FROM UPD_REXFUND WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_fork_rexbal'} = $dbh->prepare
+        ('DELETE FROM UPD_REXBAL WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_fork_rexpool'} = $dbh->prepare
+        ('DELETE FROM UPD_REXPOOL WHERE network = ? AND block_num >= ? ');
     
     $db->{'sth_upd_currency'} = $dbh->prepare
         ('INSERT INTO UPD_CURRENCY_BAL ' . 
@@ -534,6 +654,22 @@ sub getdb
          '(network, account_name, block_num, block_time, cpu_weight, net_weight, ram_bytes, deleted) ' .
          'VALUES(?,?,?,?,?,?,?,?)');
 
+    $db->{'sth_upd_rexfund'} = $dbh->prepare
+        ('INSERT INTO UPD_REXFUND ' . 
+         '(network, account_name, block_num, block_time, balance, deleted) ' .
+         'VALUES(?,?,?,?,?,?)');
+
+    $db->{'sth_upd_rexbal'} = $dbh->prepare
+        ('INSERT INTO UPD_REXBAL ' . 
+         '(network, account_name, block_num, block_time, vote_stake, rex_balance, matured_rex, ' . 
+         'rex_maturities, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?)');
+
+    $db->{'sth_upd_rexpool'} = $dbh->prepare
+        ('INSERT INTO UPD_REXPOOL ' . 
+         '(network, block_num, block_time, total_lent, total_unlent, total_rent, total_lendable,
+         total_rex, namebid_proceeds, loan_num) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?,?)');
     
     $db->{'sth_upd_sync_head'} = $dbh->prepare
         ('UPDATE SYNC SET block_num=?, block_time=?, irreversible=? WHERE network = ?');
@@ -676,4 +812,61 @@ sub getdb
 
     $db->{'sth_del_upd_userres'} = $dbh->prepare
         ('DELETE FROM UPD_USERRES WHERE network = ? AND block_num <= ?');    
+
+
+
+    $db->{'sth_get_upd_rexfund'} = $dbh->prepare
+        ('SELECT account_name, block_num, block_time, balance, deleted ' .
+         'FROM UPD_REXFUND WHERE network = ? AND block_num <= ? ORDER BY id');
+
+    $db->{'sth_erase_rexfund'} = $dbh->prepare
+        ('DELETE FROM REXFUND WHERE network = ? AND account_name = ?');
+    
+    $db->{'sth_save_rexfund'} = $dbh->prepare
+        ('INSERT INTO REXFUND ' .
+         '(network, account_name, block_num, block_time, balance) ' .
+         'VALUES(?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, balance=?');
+
+    $db->{'sth_del_upd_rexfund'} = $dbh->prepare
+        ('DELETE FROM UPD_REXFUND WHERE network = ? AND block_num <= ?');    
+
+
+
+    $db->{'sth_get_upd_rexbal'} = $dbh->prepare
+        ('SELECT account_name, block_num, block_time, vote_stake, rex_balance, matured_rex, ' .
+         'rex_maturities, deleted ' .
+         'FROM UPD_REXBAL WHERE network = ? AND block_num <= ? ORDER BY id');
+
+    $db->{'sth_erase_rexbal'} = $dbh->prepare
+        ('DELETE FROM REXBAL WHERE network = ? AND account_name = ?');
+    
+    $db->{'sth_save_rexbal'} = $dbh->prepare
+        ('INSERT INTO REXBAL ' .
+         '(network, account_name, block_num, block_time, vote_stake, rex_balance, matured_rex, ' .
+         'rex_maturities) ' .
+         'VALUES(?,?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, vote_stake=?, rex_balance=?, matured_rex=?, ' .
+         'rex_maturities=?');
+
+    $db->{'sth_del_upd_rexbal'} = $dbh->prepare
+        ('DELETE FROM UPD_REXBAL WHERE network = ? AND block_num <= ?');    
+
+
+
+    $db->{'sth_get_upd_rexpool'} = $dbh->prepare
+        ('SELECT block_num, block_time, total_lent, total_unlent, total_rent, total_lendable, ' .
+         'total_rex, namebid_proceeds, loan_num ' .
+         'FROM UPD_REXPOOL WHERE network = ? AND block_num <= ? ORDER BY id');
+
+    $db->{'sth_save_rexpool'} = $dbh->prepare
+        ('INSERT INTO REXPOOL ' .
+         '(network, block_num, block_time, total_lent, total_unlent, total_rent, total_lendable, ' .
+         'total_rex, namebid_proceeds, loan_num) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, total_lent=?, total_unlent=?, total_rent=?, total_lendable=?, ' .
+         'total_rex=?, namebid_proceeds=?, loan_num=?');
+
+    $db->{'sth_del_upd_rexpool'} = $dbh->prepare
+        ('DELETE FROM UPD_REXPOOL WHERE network = ? AND block_num <= ?');    
 }
