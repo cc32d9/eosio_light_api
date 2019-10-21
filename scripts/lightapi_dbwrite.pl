@@ -234,8 +234,7 @@ sub process_data
                     
                     $db->{'sth_upd_rexpool'}->execute
                         ($network, $data->{'block_num'}, $block_time,
-                         $tlent, $tunlent, $tlendable, $trex, $nbid, $kvo->{'value'}{'loan_num'},
-                         ($data->{'added'} eq 'true')?0:1);
+                         $tlent, $tunlent, $trent, $tlendable, $trex, $nbid, $kvo->{'value'}{'loan_num'});
                 }
             }
         }
