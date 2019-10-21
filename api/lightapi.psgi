@@ -542,14 +542,20 @@ sub get_rexbalances
     if( not $netinfo->{'rex_enabled'} ) {
         return;
     }
+
+    my $decimals = $netinfo->{'decimals'};
+    my $systoken = $netinfo->{'systoken'};
     
     my $rex = retrieve_rexinfo($network, $acc);
     
-    $result->{'rex'}{'fund'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s', $rex->{'fund'}, $netinfo->{'systoken'});
+    $result->{'rex'}{'fund'} = sprintf('%.'.$decimals . 'f %s', $rex->{'fund'}, $systoken);
     
     my $maturing_rex = Math::BigFloat->new(0);
     my $matured_rex = Math::BigFloat->new(0);
+    my $savings_rex = Math::BigFloat->new(0);
     my $vote_stake = 0;
+
+    my $end_of_time = DateTime->from_epoch('epoch' => 0xffffffff, 'time_zone' => 'UTC');
 
     if( defined($rex->{'bal'}) ) {
         my $rexbal = $rex->{'bal'};
@@ -566,7 +572,12 @@ sub get_rexbalances
                 $matured_rex += $enry->{'second'};
             }
             else {
-                $maturing_rex += $enry->{'second'};
+                if( DateTime->compare($mt, $end_of_time) == 0 ) {
+                    $savings_rex += $enry->{'second'};
+                }
+                else {
+                    $maturing_rex += $enry->{'second'};
+                }
             }
         }
     }
@@ -574,11 +585,14 @@ sub get_rexbalances
     my $rexprice = Math::BigFloat->new
         ($rex->{'pool'}{'total_lendable'})->bdiv($rex->{'pool'}->{'total_rex'})->bdiv(10000);
     
-    $result->{'rex'}{'maturing'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s',
-                                           $maturing_rex*$rexprice, $netinfo->{'systoken'});
+    $result->{'rex'}{'maturing'} = sprintf('%.'.$decimals . 'f %s',
+                                           $maturing_rex*$rexprice, $systoken);
     
-    $result->{'rex'}{'matured'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s',
-                                          $matured_rex*$rexprice, $netinfo->{'systoken'});
+    $result->{'rex'}{'matured'} = sprintf('%.'.$decimals . 'f %s',
+                                          $matured_rex*$rexprice, $systoken);
+
+    $result->{'rex'}{'savings'} = sprintf('%.'.$decimals . 'f %s',
+                                          $savings_rex*$rexprice, $systoken);
 }
 
 
