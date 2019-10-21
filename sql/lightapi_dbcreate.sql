@@ -13,7 +13,8 @@ CREATE TABLE NETWORKS
  description       VARCHAR(256) NOT NULL,
  systoken          VARCHAR(7) NOT NULL,
  decimals          TINYINT NOT NULL,
- production        TINYINT NOT NULL DEFAULT 1
+ production        TINYINT NOT NULL DEFAULT 1,
+ rex_enabled       TINYINT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB;
 
 

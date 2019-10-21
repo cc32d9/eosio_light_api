@@ -48,6 +48,7 @@ our $db;
 my $json = JSON->new->canonical;
 
 my $precision;
+my $rex_enabled;
 
 my $confirmed_block = 0;
 my $unconfirmed_block = 0;
@@ -56,12 +57,13 @@ my $irreversible = 0;
 getdb();
 {
     my $sth = $db->{'dbh'}->prepare
-        ('SELECT decimals FROM NETWORKS WHERE network=?');
+        ('SELECT decimals, rex_enabled FROM NETWORKS WHERE network=?');
     $sth->execute($network);
     my $r = $sth->fetchall_arrayref();
     die("Unknown network: $network") if scalar(@{$r}) == 0;
     my $decimals = $r->[0][0];
     $precision = 10**$decimals;
+    $rex_enabled = $r->[0][1];
 }
 {
     my $sth = $db->{'dbh'}->prepare
@@ -558,6 +560,13 @@ sub process_data
             {
                 $db->{'sth_del_upd_rexpool'}->execute($network, $last_irreversible);
                 $db->{'dbh'}->commit();
+
+                if( not $rex_enabled )
+                {
+                    $db->{'dbh'}->do('UPDATE NETWORKS SET rex_enabled=1 WHERE network=\'' . $network . '\'');
+                    $db->{'dbh'}->commit();
+                    $rex_enabled = 1;
+                }                    
             }
             
             $irreversible = $last_irreversible;

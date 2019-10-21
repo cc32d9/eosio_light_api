@@ -72,7 +72,7 @@ sub check_dbserver
              'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network');
 
         $sth_getnet = $dbh->prepare
-            ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' .
+            ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, rex_enabled, ' .
              'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync ' .
              'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network WHERE NETWORKS.network=?');
 
@@ -539,6 +539,10 @@ sub get_rexbalances
     my $acc = shift;
     my $netinfo = shift;
 
+    if( not $netinfo->{'rex_enabled'} ) {
+        return;
+    }
+    
     my $rex = retrieve_rexinfo($network, $acc);
     
     $result->{'rex'}{'fund'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s', $rex->{'fund'}, $netinfo->{'systoken'});
@@ -941,6 +945,13 @@ $builder->mount
              my $res = $req->new_response(400);
              $res->content_type('text/plain');
              $res->body('Unknown network name: ' . $network);
+             return $res->finalize;
+         }
+
+         if( not $netinfo->{'rex_enabled'} ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('REX is not enabled in ' . $network);
              return $res->finalize;
          }
 

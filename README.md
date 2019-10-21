@@ -22,6 +22,13 @@ taking the data.
 * Retrieve all account information except token balances:
   `http://apihost.domain/api/accinfo/eos/ACCOUNT`
 
+* Retrieve REX balances (fund, maturing, matured) for an account:
+  `http://apihost.domain/api/rexbalance/eos/ACCOUNT`
+
+* Retrieve raw REX information for an account (to perform calculations
+  on the client side):
+  `http://apihost.domain/api/rexraw/eos/ACCOUNT`
+
 * Retrieve all accounts in all known EOS networks dependent on a public key:
  `http://apihost.domain/api/key/KEY`
 
