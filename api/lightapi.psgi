@@ -452,13 +452,13 @@ sub get_accinfo
 
 
 
-sub get_rexbalances
+sub retrieve_rexinfo
 {
-    my $result = shift;
     my $network = shift;
     my $acc = shift;
-    my $netinfo = shift;
 
+    my $ret = {};
+    
     my $rexpool;
 
     {
@@ -476,8 +476,10 @@ sub get_rexbalances
         }
     }
 
+    $ret->{'pool'} = $rexpool;
+    
     my $rexfund = 0;
-
+    
     {
         $sth_rexfund->execute($network, $acc);
         my $r = $sth_rexfund->fetchall_arrayref({});
@@ -496,7 +498,7 @@ sub get_rexbalances
         }
     }
     
-    $result->{'rex'}{'fund'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s', $rexfund, $netinfo->{'systoken'});
+    $ret->{'fund'} = $rexfund;
 
     my $rexbal;
     {
@@ -516,18 +518,43 @@ sub get_rexbalances
             }
         }
     }
-        
+
+    if( defined($rexbal) ) { 
+        $ret->{'bal'}= {
+                        'vote_stake' => $rexbal->{'vote_stake'},
+                        'rex_balance' => $rexbal->{'rex_balance'},
+                        'matured_rex' => $rexbal->{'matured_rex'},
+                       };
+        $ret->{'bal'}{'rex_maturities'} = $json->decode($rexbal->{'rex_maturities'});
+    }
+    
+    return $ret;
+}
+
+
+sub get_rexbalances
+{
+    my $result = shift;
+    my $network = shift;
+    my $acc = shift;
+    my $netinfo = shift;
+
+    my $rex = retrieve_rexinfo($network, $acc);
+    
+    $result->{'rex'}{'fund'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s', $rex->{'fund'}, $netinfo->{'systoken'});
+    
     my $maturing_rex = Math::BigFloat->new(0);
     my $matured_rex = Math::BigFloat->new(0);
     my $vote_stake = 0;
 
-    if( defined($rexbal) ) {
+    if( defined($rex->{'bal'}) ) {
+        my $rexbal = $rex->{'bal'};
         $matured_rex += $rexbal->{'matured_rex'};
         $vote_stake = $rexbal->{'vote_stake'};
-
+            
         my $now = DateTime->now('time_zone' => 'UTC');
-        my $maturities = $json->decode($rexbal->{'rex_maturities'});
-        foreach my $enry (@{$maturities}) {
+        
+        foreach my $enry (@{$rex->{'bal'}{'rex_maturities'}}) {
             my $mt = DateTime::Format::ISO8601->parse_datetime($enry->{'first'});
             $mt->set_time_zone('UTC');
 
@@ -540,14 +567,16 @@ sub get_rexbalances
         }
     }
 
-    my $rexprice = Math::BigFloat->new($rexpool->{'total_lendable'})->bdiv($rexpool->{'total_rex'})->bdiv(10000);
+    my $rexprice = Math::BigFloat->new
+        ($rex->{'pool'}{'total_lendable'})->bdiv($rex->{'pool'}->{'total_rex'})->bdiv(10000);
     
     $result->{'rex'}{'maturing'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s',
                                            $maturing_rex*$rexprice, $netinfo->{'systoken'});
     
     $result->{'rex'}{'matured'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s',
-                                           $matured_rex*$rexprice, $netinfo->{'systoken'});
+                                          $matured_rex*$rexprice, $netinfo->{'systoken'});
 }
+
 
 
 # stolen from Bitcoin::Crypto::Base58;
@@ -770,7 +799,7 @@ $builder->mount
 
          get_accinfo($result, $network, $acc);
          get_balances($result, $network, $acc);
-
+         get_rexbalances($result, $network, $acc, $netinfo);
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
@@ -854,6 +883,7 @@ $builder->mount
      });
 
 
+
 $builder->mount
     ('/api/rexbalance' => sub {
          my $env = shift;
@@ -881,6 +911,41 @@ $builder->mount
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
          get_rexbalances($result, $network, $acc, $netinfo);
+
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
+$builder->mount
+    ('/api/rexraw' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name and a valid EOS account name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $acc = $2;
+         check_dbserver();
+
+         my $netinfo = get_network($network);
+         if ( not defined($netinfo) ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Unknown network name: ' . $network);
+             return $res->finalize;
+         }
+
+         my $result = {'account_name' => $acc, 'chain' => $netinfo};
+         $result->{'rexraw'} = retrieve_rexinfo($network, $acc);
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
