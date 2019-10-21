@@ -3,7 +3,10 @@ use warnings;
 use JSON;
 use DBI;
 use Math::BigInt;
+use Math::BigFloat;
 use Crypt::Digest::RIPEMD160 qw(ripemd160 ripemd160_hex);
+use DateTime;
+use DateTime::Format::ISO8601;
 use Plack::Builder;
 use Plack::Request;
 
@@ -22,6 +25,12 @@ my $sth_bal;
 my $sth_bal_upd;
 my $sth_tokenbal;
 my $sth_tokenbal_upd;
+my $sth_rexpool;
+my $sth_rexpool_upd;
+my $sth_rexfund;
+my $sth_rexfund_upd;
+my $sth_rexbal;
+my $sth_rexbal_upd;
 my $sth_topholders;
 my $sth_holdercount;
 my $sth_perms;
@@ -103,6 +112,56 @@ sub check_dbserver
              'FROM UPD_CURRENCY_BAL ' .
              'WHERE network=? AND account_name=? AND contract=? AND currency=? ORDER BY id');
 
+        $sth_rexpool = $dbh->prepare
+            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
+             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
+             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
+             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
+             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
+             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
+             'loan_num ' .
+             'FROM REXPOOL ' .
+             'WHERE network=?');
+
+        $sth_rexpool_upd = $dbh->prepare
+            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
+             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
+             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
+             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
+             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
+             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
+             'loan_num ' .
+             'FROM UPD_REXPOOL ' .
+             'WHERE network=? ORDER BY id');
+
+        $sth_rexfund = $dbh->prepare
+            ('SELECT ' .
+             'CAST(balance AS DECIMAL(48,24)) AS balance ' .
+             'FROM REXFUND ' .
+             'WHERE network=? AND account_name=?');
+        
+        $sth_rexfund_upd = $dbh->prepare
+            ('SELECT ' .
+             'CAST(balance AS DECIMAL(48,24)) AS balance, deleted ' .
+             'FROM UPD_REXFUND ' .
+             'WHERE network=? AND account_name=? ORDER BY id');
+
+        $sth_rexbal = $dbh->prepare
+            ('SELECT ' .
+             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
+             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
+             'matured_rex, rex_maturities ' .
+             'FROM REXBAL ' .
+             'WHERE network=? AND account_name=?');
+
+        $sth_rexbal_upd = $dbh->prepare
+            ('SELECT ' .
+             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
+             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
+             'matured_rex, rex_maturities, deleted ' .
+             'FROM UPD_REXBAL ' .
+             'WHERE network=? AND account_name=? ORDER BY id');
+        
         $sth_topholders = $dbh->prepare
             ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
              'FROM CURRENCY_BAL ' .
@@ -392,7 +451,104 @@ sub get_accinfo
 }
 
 
+
+sub get_rexbalances
+{
+    my $result = shift;
+    my $network = shift;
+    my $acc = shift;
+    my $netinfo = shift;
+
+    my $rexpool;
+
+    {
+        $sth_rexpool->execute($network);
+        my $r = $sth_rexpool->fetchall_arrayref({});
+        if ( scalar(@{$r}) == 0 ) {
+            return;
+        }
+        $rexpool = $r->[0];
+        
+        $sth_rexpool_upd->execute($network);
+        my $upd = $sth_rexpool_upd->fetchall_arrayref({});
+        if( scalar(@{$upd}) > 0 ) {
+            $rexpool = pop @{$upd};
+        }
+    }
+
+    my $rexfund = 0;
+
+    {
+        $sth_rexfund->execute($network, $acc);
+        my $r = $sth_rexfund->fetchall_arrayref({});
+        if ( scalar(@{$r}) > 0 ) {
+            $rexfund = $r->[0]{'balance'};
+        }
+
+        $sth_rexfund_upd->execute($network, $acc);
+        my $upd = $sth_rexfund_upd->fetchall_arrayref({});
+        foreach my $row (@{$upd}) {
+            if ( $row->{'deleted'} ) {
+                $rexfund = 0;
+            } else {
+                $rexfund = $row->{'balance'};
+            }
+        }
+    }
     
+    $result->{'rex'}{'fund'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s', $rexfund, $netinfo->{'systoken'});
+
+    my $rexbal;
+    {
+        $sth_rexbal->execute($network, $acc);
+        my $r = $sth_rexbal->fetchall_arrayref({});
+        if ( scalar(@{$r}) > 0 ) {
+            $rexbal = $r->[0];
+        }
+
+        $sth_rexbal_upd->execute($network, $acc);
+        my $upd = $sth_rexbal_upd->fetchall_arrayref({});
+        foreach my $row (@{$upd}) {
+            if ( $row->{'deleted'} ) {
+                $rexbal = undef;
+            } else {
+                $rexbal = $row;
+            }
+        }
+    }
+        
+    my $maturing_rex = Math::BigFloat->new(0);
+    my $matured_rex = Math::BigFloat->new(0);
+    my $vote_stake = 0;
+
+    if( defined($rexbal) ) {
+        $matured_rex += $rexbal->{'matured_rex'};
+        $vote_stake = $rexbal->{'vote_stake'};
+
+        my $now = DateTime->now('time_zone' => 'UTC');
+        my $maturities = $json->decode($rexbal->{'rex_maturities'});
+        foreach my $enry (@{$maturities}) {
+            my $mt = DateTime::Format::ISO8601->parse_datetime($enry->{'first'});
+            $mt->set_time_zone('UTC');
+
+            if( DateTime->compare($mt, $now) <= 0 ) {
+                $matured_rex += $enry->{'second'};
+            }
+            else {
+                $maturing_rex += $enry->{'second'};
+            }
+        }
+    }
+
+    my $rexprice = Math::BigFloat->new($rexpool->{'total_lendable'})->bdiv($rexpool->{'total_rex'})->bdiv(10000);
+    
+    $result->{'rex'}{'maturing'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s',
+                                           $maturing_rex*$rexprice, $netinfo->{'systoken'});
+    
+    $result->{'rex'}{'matured'} = sprintf('%.'.$netinfo->{'decimals'} . 'f %s',
+                                           $matured_rex*$rexprice, $netinfo->{'systoken'});
+}
+
 
 # stolen from Bitcoin::Crypto::Base58;
 
@@ -689,6 +845,42 @@ $builder->mount
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
          get_balances($result, $network, $acc);
+
+         my $res = $req->new_response(200);
+         $res->content_type('application/json');
+         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
+         $res->body($j->encode($result));
+         $res->finalize;
+     });
+
+
+$builder->mount
+    ('/api/rexbalance' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+         my $path_info = $req->path_info;
+
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Expected a network name and a valid EOS account name in URL path');
+             return $res->finalize;
+         }
+
+         my $network = $1;
+         my $acc = $2;
+         check_dbserver();
+
+         my $netinfo = get_network($network);
+         if ( not defined($netinfo) ) {
+             my $res = $req->new_response(400);
+             $res->content_type('text/plain');
+             $res->body('Unknown network name: ' . $network);
+             return $res->finalize;
+         }
+
+         my $result = {'account_name' => $acc, 'chain' => $netinfo};
+         get_rexbalances($result, $network, $acc, $netinfo);
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');

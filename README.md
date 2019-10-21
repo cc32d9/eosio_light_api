@@ -103,7 +103,7 @@ following links:
 
 ```
 sudo apt-get install git make cpanminus gcc g++ mariadb-server \
-libmysqlclient-dev libdbi-perl libjson-xs-perl libjson-perl
+libmysqlclient-dev libdbi-perl libjson-xs-perl libjson-perl libdatetime-format-iso8601-perl
 
 sudo cpanm DBD::MariaDB
 sudo cpanm Starman
