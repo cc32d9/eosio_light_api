@@ -68,36 +68,38 @@ sub check_dbserver
 
         $sth_allnetworks = $dbh->prepare
             ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' .
-             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync ' .
+             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync, ' .
+             'block_num, block_time ' .
              'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network');
 
         $sth_getnet = $dbh->prepare
             ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, rex_enabled, ' .
-             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync ' .
+             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync, ' .
+             'block_num, block_time ' .
              'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network WHERE NETWORKS.network=?');
 
         $sth_res = $dbh->prepare
-            ('SELECT block_num, block_time, ' .
+            ('SELECT ' .
              'cpu_weight, net_weight, ' .
              'ram_bytes ' .
              'FROM USERRES ' .
              'WHERE network=? AND account_name=?');
 
         $sth_res_upd = $dbh->prepare
-            ('SELECT block_num, block_time, ' .
+            ('SELECT ' .
              'cpu_weight, net_weight, ' .
              'ram_bytes, deleted ' .
              'FROM UPD_USERRES ' .
              'WHERE network=? AND account_name=? ORDER BY id');
 
         $sth_bal = $dbh->prepare
-            ('SELECT block_num, block_time, contract, currency, ' .
+            ('SELECT contract, currency, ' .
              'CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
              'FROM CURRENCY_BAL ' .
              'WHERE network=? AND account_name=?');
 
         $sth_bal_upd = $dbh->prepare
-            ('SELECT block_num, block_time, contract, currency, ' .
+            ('SELECT contract, currency, ' .
              'CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
              'FROM UPD_CURRENCY_BAL ' .
              'WHERE network=? AND account_name=? ORDER BY id');
@@ -174,7 +176,7 @@ sub check_dbserver
              'WHERE network=? AND contract=? AND currency=?');
 
         $sth_perms = $dbh->prepare
-            ('SELECT perm, threshold, block_num, block_time ' .
+            ('SELECT perm, threshold ' .
              'FROM AUTH_THRESHOLDS ' .
              'WHERE network=? AND account_name=?');
 
@@ -189,50 +191,50 @@ sub check_dbserver
              'WHERE network=? AND account_name=? AND perm=?');
 
         $sth_auth_upd = $dbh->prepare
-            ('SELECT network, account_name, block_num, block_time, perm, jsdata, deleted ' .
+            ('SELECT network, account_name, perm, jsdata, deleted ' .
              'FROM UPD_AUTH ORDER BY id');
 
         $sth_acc_auth_upd = $dbh->prepare
-            ('SELECT block_num, block_time, perm, jsdata, deleted ' .
+            ('SELECT perm, jsdata, deleted ' .
              'FROM UPD_AUTH WHERE network=? AND account_name=? ORDER BY id');
 
         $sth_linkauth = $dbh->prepare
-            ('SELECT code, type, requirement, block_num, block_time ' .
+            ('SELECT code, type, requirement ' .
              'FROM LINKAUTH ' .
              'WHERE network=? AND account_name=?');
 
         $sth_linkauth_upd = $dbh->prepare
-            ('SELECT code, type, requirement, block_num, block_time, deleted ' .
+            ('SELECT code, type, requirement, deleted ' .
              'FROM UPD_LINKAUTH ' .
              'WHERE network=? AND account_name=? ORDER BY id');
 
         $sth_delegated_from = $dbh->prepare
-            ('SELECT del_from, cpu_weight, net_weight, block_num, block_time ' .
+            ('SELECT del_from, cpu_weight, net_weight ' .
              'FROM DELBAND ' .
              'WHERE network=? AND account_name=?');
 
         $sth_delegated_from_upd = $dbh->prepare
-            ('SELECT del_from, cpu_weight, net_weight, block_num, block_time, deleted ' .
+            ('SELECT del_from, cpu_weight, net_weight, deleted ' .
              'FROM UPD_DELBAND ' .
              'WHERE network=? AND account_name=? ORDER BY id');
 
         $sth_delegated_to = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight, block_num, block_time ' .
+            ('SELECT account_name, cpu_weight, net_weight ' .
              'FROM DELBAND ' .
              'WHERE network=? AND del_from=?');
 
         $sth_delegated_to_upd = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight, block_num, block_time, deleted ' .
+            ('SELECT account_name, cpu_weight, net_weight, deleted ' .
              'FROM UPD_DELBAND ' .
              'WHERE network=? AND del_from=? ORDER BY id');
 
         $sth_get_code = $dbh->prepare
-            ('SELECT code_hash, block_num, block_time ' .
+            ('SELECT code_hash ' .
              'FROM CODEHASH ' .
              'WHERE network=? AND account_name=?');
 
         $sth_get_code_upd = $dbh->prepare
-            ('SELECT code_hash, block_num, block_time, deleted ' .
+            ('SELECT code_hash, deleted ' .
              'FROM UPD_CODEHASH ' .
              'WHERE network=? AND account_name=? ORDER BY id');
 
@@ -258,7 +260,7 @@ sub check_dbserver
              'WHERE network=? ORDER BY weight_sum DESC LIMIT ?');
 
         $sth_searchcode = $dbh->prepare
-            ('SELECT network, account_name, code_hash, block_num, block_time ' .
+            ('SELECT network, account_name, code_hash ' .
              'FROM CODEHASH ' .
              'WHERE code_hash=?');
 
@@ -739,7 +741,7 @@ sub auth_upd_row_to_perm
     my $auth = shift;
 
     my $ret = {};
-    foreach my $attr ('block_num', 'block_time', 'perm')
+    foreach my $attr ('perm')
     {
         $ret->{$attr} = $row->{$attr};
     }
