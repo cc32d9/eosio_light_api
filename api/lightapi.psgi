@@ -53,6 +53,7 @@ my $sth_topram;
 my $sth_topstake;
 my $sth_searchcode;
 my $sth_sync;
+my $sth_all_sync;
 
 my $json = JSON->new();
 my $jsonp = JSON->new()->pretty->canonical;
@@ -267,6 +268,11 @@ sub check_dbserver
         $sth_sync = $dbh->prepare
             ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
              'FROM SYNC WHERE network=?');
+
+        $sth_all_sync = $dbh->prepare
+            ('SELECT network, ' .
+             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync ' .
+             'FROM SYNC');
     }
 }
 
@@ -1390,6 +1396,31 @@ $builder->mount
      });
 
 
+$builder->mount
+    ('/api/status' => sub {
+         my $env = shift;
+         my $req = Plack::Request->new($env);
+
+         check_dbserver();
+         $sth_all_sync->execute();
+         my $r = $sth_all_sync->fetchall_arrayref({});
+
+         my $status = 'OK';
+         my $failed = '';
+         my $http_status = 200;
+         foreach my $row (@{$r}) {
+             if( $row->{'sync'} > 180 ) {
+                 $status = 'OUT_OF_SYNC';
+                 $failed .= $row->{'network'} . ':' . $row->{'sync'} . ';';
+                 $http_status = 503;
+             }
+         }
+         
+         my $res = $req->new_response($http_status);
+         $res->content_type('text/plain');
+         $res->body(join(' ', $status, $failed));
+         $res->finalize;
+     });
 
 
 

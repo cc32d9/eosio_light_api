@@ -32,11 +32,6 @@ taking the data.
 * Retrieve all accounts in all known EOS networks dependent on a public key:
  `http://apihost.domain/api/key/KEY`
 
-* `http://apihost.domain/api/sync/eos` returns a plain text with delay
-  in seconds that this server's blockchain database is behind the real
-  time, and a status: OK if the delay is within 180 seconds, or
-  'OUT_OF_SYNC' otherwise.
-
 * `http://apihost.domain/api/tokenbalance/eos/ACCOUNT/CONTRACT/TOKEN`
   returns a plain text with numeric output indicating the token
   balance. Zero is returned if the token is not present or does not
@@ -65,7 +60,17 @@ taking the data.
 
 * `http://apihost.domain/api/codehash/SHA256` retrieves all accounts in
   all known EOS networks by contract hash.
- 
+
+* `http://apihost.domain/api/sync/eos` returns a plain text with delay
+  in seconds that this server's blockchain database is behind the real
+  time, and a status: OK if the delay is within 180 seconds, or
+  'OUT_OF_SYNC' otherwise.
+
+* `http://apihost.domain/api/status` returns a plain text with either
+  'OK' or 'OUT_OF_SYNC' indicating the overall health of the API
+  host. If any of networks experience delay higher than 3 minutes, the
+  returned status is 'OUT_OF_SYNC', and HTTP status code is 503.
+
 
 In addition, adding `?pretty=1` to the URL, you get the resulting JSON
 sorted and formatted for human viewing.
