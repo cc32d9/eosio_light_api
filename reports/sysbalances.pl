@@ -61,7 +61,7 @@ while( my $r = $sth->fetchrow_arrayref() )
 
 
 $sth = $dbh->prepare
-    ('SELECT account_name, cpu_weight+net_weight FROM USERRES WHERE network=?');
+    ('SELECT del_from, cpu_weight+net_weight FROM DELBAND WHERE network=?');
 
 $sth->execute($network);
 while( my $r = $sth->fetchrow_arrayref() )
