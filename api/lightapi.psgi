@@ -242,12 +242,12 @@ sub check_dbserver
         $sth_searchkey = $dbh->prepare
             ('SELECT network, account_name, perm, pubkey, weight ' .
              'FROM AUTH_KEYS ' .
-             'WHERE pubkey=?');
+             'WHERE pubkey=? LIMIT 100');
 
         $sth_acc_by_actor = $dbh->prepare
             ('SELECT account_name, perm ' .
              'FROM AUTH_ACC ' .
-             'WHERE network=? AND actor=? AND permission=?');
+             'WHERE network=? AND actor=? AND permission=? LIMIT 100');
 
         $sth_usercount = $dbh->prepare
             ('SELECT count(*) as usercount FROM USERRES WHERE network=?');

@@ -29,8 +29,9 @@ taking the data.
   on the client side):
   `http://apihost.domain/api/rexraw/eos/ACCOUNT`
 
-* Retrieve all accounts in all known EOS networks dependent on a public key:
- `http://apihost.domain/api/key/KEY`
+* Retrieve all accounts in all known EOSIO networks dependent on a
+ public key (only up to 100 accounts are returned), including accounts
+ with recursive permissions: `http://apihost.domain/api/key/KEY`
 
 * `http://apihost.domain/api/tokenbalance/eos/ACCOUNT/CONTRACT/TOKEN`
   returns a plain text with numeric output indicating the token
