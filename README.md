@@ -83,9 +83,11 @@ Streaming requests utilize SSE (Server-Sent Events) to deliver bulky
 data to the client. SSE is supported natively by JavaScript in modern
 browsers and in `nodejs`.
 
-At the end of each API request, the server sends `end` event with a
-total count of entries in data field. Normally the client should close
-the SSE socket upon receiving the `end` event type.
+At the end of each API request, the server sends an `end` event. The
+data is a JSON object with `count` and `reason` fields. The reason can
+be `ok` for normal finishing, or `timeout` if the request lasts for
+more than 60 seconds. Normally the client should close the SSE socket
+upon receiving the `end` event type.
 
 * `http://apihost.domain/api/sse/balances_by_key?network=NETWORK&key=KEY`
   searches non-recursively for accounts matching a specified public
