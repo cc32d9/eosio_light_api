@@ -48,6 +48,7 @@ my $sth_get_code;
 my $sth_get_code_upd;
 my $sth_searchkey;
 my $sth_acc_by_actor;
+my $sth_stream_searchkey;
 my $sth_usercount;
 my $sth_topram;
 my $sth_topstake;
@@ -57,6 +58,17 @@ my $sth_all_sync;
 
 my $json = JSON->new();
 my $jsonp = JSON->new()->pretty->canonical;
+
+
+sub error
+{
+    my $req = shift;
+    my $msg = shift;
+    my $res = $req->new_response(400);
+    $res->content_type('text/plain');
+    $res->body($msg . "\x0d\x0a");
+    return $res->finalize;
+}
 
 
 sub check_dbserver
@@ -242,13 +254,18 @@ sub check_dbserver
         $sth_searchkey = $dbh->prepare
             ('SELECT network, account_name, perm, pubkey, weight ' .
              'FROM AUTH_KEYS ' .
-             'WHERE pubkey=? LIMIT 100');
+             'WHERE pubkey=? LIMIT 100');        
 
         $sth_acc_by_actor = $dbh->prepare
             ('SELECT account_name, perm ' .
              'FROM AUTH_ACC ' .
              'WHERE network=? AND actor=? AND permission=? LIMIT 100');
 
+        $sth_stream_searchkey = $dbh->prepare
+            ('SELECT account_name, perm, pubkey, weight ' .
+             'FROM AUTH_KEYS ' .
+             'WHERE network=? AND pubkey=?');
+        
         $sth_usercount = $dbh->prepare
             ('SELECT count(*) as usercount FROM USERRES WHERE network=?');
 
@@ -803,10 +820,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name and a valid EOS account name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name and a valid EOS account name in URL path'));
          }
 
          my $network = $1;
@@ -815,10 +829,7 @@ $builder->mount
 
          my $netinfo = get_network($network);
          if ( not defined($netinfo) ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Unknown network name: ' . $network);
-             return $res->finalize;
+             return(error($req, 'Unknown network name: ' . $network));
          }
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
@@ -842,10 +853,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name and a valid EOS account name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name and a valid EOS account name in URL path'));
          }
 
          my $network = $1;
@@ -854,10 +862,7 @@ $builder->mount
 
          my $netinfo = get_network($network);
          if ( not defined($netinfo) ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Unknown network name: ' . $network);
-             return $res->finalize;
+             return(error($req, 'Unknown network name: ' . $network));
          }
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
@@ -880,10 +885,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name and a valid EOS account name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name and a valid EOS account name in URL path'));
          }
 
          my $network = $1;
@@ -892,10 +894,7 @@ $builder->mount
 
          my $netinfo = get_network($network);
          if ( not defined($netinfo) ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Unknown network name: ' . $network);
-             return $res->finalize;
+             return(error($req, 'Unknown network name: ' . $network));
          }
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
@@ -917,10 +916,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name and a valid EOS account name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name and a valid EOS account name in URL path'));
          }
 
          my $network = $1;
@@ -929,10 +925,7 @@ $builder->mount
 
          my $netinfo = get_network($network);
          if ( not defined($netinfo) ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Unknown network name: ' . $network);
-             return $res->finalize;
+             return(error($req, 'Unknown network name: ' . $network));
          }
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
@@ -952,10 +945,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name and a valid EOS account name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name and a valid EOS account name in URL path'));
          }
 
          my $network = $1;
@@ -964,17 +954,11 @@ $builder->mount
 
          my $netinfo = get_network($network);
          if ( not defined($netinfo) ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Unknown network name: ' . $network);
-             return $res->finalize;
+             return(error($req, 'Unknown network name: ' . $network));
          }
 
          if( not $netinfo->{'rex_enabled'} ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('REX is not enabled in ' . $network);
-             return $res->finalize;
+             return(error($req, 'REX is not enabled on ' . $network));
          }
 
          my $result = {'account_name' => $acc, 'chain' => $netinfo};
@@ -995,10 +979,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([a-z1-5.]{1,13})\/([A-Z]{1,7})$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected network name, account, contract, and token name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected network name, account, contract, and token name in URL path'));
          }
 
          my $network = $1;
@@ -1041,10 +1022,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([A-Z]{1,7})\/(\d+)$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected network name, contract, token name, count in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected network name, contract, token name, count in URL path'));
          }
 
          my $network = $1;
@@ -1054,10 +1032,7 @@ $builder->mount
 
          if( $count < 10 or $count > 1000 )
          {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Invalid count: ' . $count);
-             return $res->finalize;
+             return(error($req, 'Invalid count: ' . $count));
          }
 
          check_dbserver();
@@ -1084,10 +1059,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([A-Z]{1,7})$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected network name, contract, token name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected network name, contract, token name in URL path'));
          }
 
          my $network = $1;
@@ -1117,10 +1089,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected an EOS key');
-             return $res->finalize;
+             return(error($req, 'Expected an EOSIO key'))
          }
 
          my $key = from_legacy_key($1);
@@ -1220,10 +1189,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name in URL path'));
          }
 
          my $network = $1;
@@ -1246,10 +1212,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/(\d+)$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name and count in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name and count in URL path'));
          }
 
          my $network = $1;
@@ -1257,10 +1220,7 @@ $builder->mount
 
          if( $count < 10 or $count > 1000 )
          {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Invalid count: ' . $count);
-             return $res->finalize;
+             return(error($req, 'Invalid count: ' . $count));
          }
 
          check_dbserver();
@@ -1287,10 +1247,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)\/(\d+)$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name and count in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name and count in URL path'));
          }
 
          my $network = $1;
@@ -1298,10 +1255,7 @@ $builder->mount
 
          if( $count < 10 or $count > 1000 )
          {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Invalid count: ' . $count);
-             return $res->finalize;
+             return(error($req, 'Invalid count: ' . $count));
          }
 
          check_dbserver();
@@ -1329,10 +1283,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)$/ or length($1) != 64 ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected SHA256 hash');
-             return $res->finalize;
+             return(error($req, 'Expected SHA256 hash'));
          }
 
          my $codehash = $1;
@@ -1368,10 +1319,7 @@ $builder->mount
          my $path_info = $req->path_info;
 
          if ( $path_info !~ /^\/(\w+)$/ ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Expected a network name in URL path');
-             return $res->finalize;
+             return(error($req, 'Expected a network name in URL path'));
          }
 
          my $network = $1;
@@ -1381,10 +1329,7 @@ $builder->mount
          my $r = $sth_sync->fetchall_arrayref();
 
          if ( scalar(@{$r}) == 0 ) {
-             my $res = $req->new_response(400);
-             $res->content_type('text/plain');
-             $res->body('Unknown network name: ' . $network);
-             return $res->finalize;
+             return(error($req, 'Unknown network name: ' . $network));
          }
 
          my $delay = $r->[0][0];
