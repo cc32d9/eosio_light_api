@@ -1,11 +1,11 @@
 # EOSIO Light API
 
-## API description
-
 The API is providing information about EOSIO blockchain accounts and
 token balances. It is deployed for several blockchains, such as EOS,
 Telos, BOS, WAX, and Europechain. Also an endpoint for Jungle testnet is
 available.
+
+## Non-streaming requests
 
 In below examples, "eos" stands for the name of the network where API is
 taking the data.
@@ -75,6 +75,24 @@ taking the data.
 
 In addition, adding `?pretty=1` to the URL, you get the resulting JSON
 sorted and formatted for human viewing.
+
+
+## Streaming requests
+
+Streaming requests utilize SSE (Server-Sent Events) to deliver bulky
+data to the client. SSE is supported natively by JavaScript in modern
+browsers and in `nodejs`.
+
+At the end of each API request, the server sends `end` event with a
+total count of entries in data field. Normally the client should close
+the SSE socket upon receiving the `end` event type.
+
+* `http://apihost.domain/api/sse/balances_by_key?network=NETWORK&key=KEY`
+  searches non-recursively for accounts matching a specified public
+  key as `active` or `owner` permission, and retrieves token balances
+  for each account. The request returns an `account_balances` event
+  for each matched account, and the data field contains a JSON object
+  with the fields `account` and `balances`.
 
 
 User discussion and support in Telegram: https://t.me/lightapi
