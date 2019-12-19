@@ -169,6 +169,12 @@ sh install_systemd_api.sh
 cat >/etc/cron.d/lightapi <<'EOT'
 */5 * * * * root perl /opt/eosio_light_api/scripts/lightapi_holdercounts.pl
 EOT
+
+curl -sL https://deb.nodesource.com/setup_13.x | bash -
+apt install -y nodejs
+cd /opt/eosio_light_api/wsapi
+npm install
+
 ```
 
 
