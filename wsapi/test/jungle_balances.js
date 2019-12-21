@@ -19,16 +19,30 @@ client.methods.set("reqdata", (socket, params) => {
 
 
 async function send_req() {
-    try {
-        let res = await client.call("get_balances", {
-            reqid: 100,
-            network: 'jungle',
-            accounts: ['cc32dninexxx', 'training1111'] });
-        console.log(JSON.stringify(res, null, 2));
-    }
-    catch(err) {
-        console.error(err);
-    }
+    client.call("get_networks")
+        .then(networks => {
+            console.log(JSON.stringify(networks, null, 2));
+            if( networks.jungle != undefined ) {
+                client.call("get_balances", {
+                    reqid: 100,
+                    network: 'jungle',
+                    accounts: ['cc32dninexxx', 'training1111'] })
+                    .then(res => {
+                        console.log(JSON.stringify(res, null, 2));
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        process.exit();
+                    });
+            }
+            else {
+                throw Error('Cannot find jungle');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            process.exit();
+        });
 }
 
 send_req();

@@ -19,18 +19,29 @@ client.methods.set("reqdata", (socket, params) => {
 
 
 async function send_req() {
-    try {
-        let res = await client.call("get_accounts_from_keys", {
-            reqid: 100,
-            network: 'jungle',
-            keys: ['EOS8C9tb8QQhZet6WWcYFCWDKHYfjC3W59ugHCD63s7LLDQx6JsNK',
-                   'EOS8T8HVXABDqauhKg2hR3SjM9zbENPvA8KrYfsirG4oHX7QVVi9a'] });
-        console.log(JSON.stringify(res, null, 2));
-    }
-    catch(err) {
-        console.error(err);
-    }
+    client.call("get_networks")
+        .then(networks => {
+            console.log(JSON.stringify(networks, null, 2));
+            if( networks.jungle != undefined ) {
+                client.call("get_accounts_from_keys", {
+                    reqid: 100,
+                    network: 'jungle',
+                    keys: ['EOS8C9tb8QQhZet6WWcYFCWDKHYfjC3W59ugHCD63s7LLDQx6JsNK',
+                           'EOS8T8HVXABDqauhKg2hR3SjM9zbENPvA8KrYfsirG4oHX7QVVi9a'] })
+                    .then(res => {
+                        console.log(JSON.stringify(res, null, 2));
+                    });
+            }
+            else {
+                throw Error('Cannot find jungle');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            process.exit();
+        });
 }
+
 
 send_req();
 

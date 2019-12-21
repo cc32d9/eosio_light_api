@@ -50,71 +50,32 @@ rpc.on('connection', (socket, req) => {
 });
 
 
-
-rpc.methods.set('get_balances', async (socket, params) => {
+rpc.methods.set('get_networks', async (socket, params) => {
     return new Promise( (resolve, reject) => {
-        console.log('get_balances');
-        if( params.reqid == undefined ) {
-            reject(new Error('Mising argument: reqid'));
-        }    
-        else if( params.network == undefined ) {
-            reject(new Error('Mising argument: network'));
-        }
-        else if( params.accounts == undefined ) {
-            reject(new Error('Mising argument: accounts'));
-        }
-        else if( typeof params.accounts !== 'object' || !Array.isArray(params.accounts) ) {
-            reject(new Error('accounts must be an array'));
-        }
-        else if( params.accounts.length > get_balances_max ) {
-            reject(new Error('Too many accounts. Maximum: ' + get_balances_max + ', requested: ' + params.accounts.length));
-        }
-        else {
-            pool.getConnection()
-                .then(conn => {
-                    (async () => {
-                        try {
-                            let netcnt = await conn.query(
-                                'SELECT count(*) as cnt FROM NETWORKS where network=?', [params.network]);
-                            
-                            if( netcnt[0].cnt == 0 ) {
-                                reject(new Error('Invalid network: ' + params.network));
-                            }
-                            else {
-                                resolve();
-                                
-                                for(let i=0; i<params.accounts.length; i++) {
-                                    let acc = params.accounts[i];
-                                    let tokens = await conn.query
-                                    ('SELECT contract, currency, CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' +
-                                     'FROM CURRENCY_BAL WHERE network=? AND account_name=?',
-                                     [params.network, acc]);
-
-                                    socket.notify('reqdata', {
-                                        'method': 'get_balances',
-                                        'reqid': params.reqid,
-                                        'data': {account: acc, balances: tokens}});
-                                }
-
-                                socket.notify('reqdata', {
-                                    'method': 'get_balances',
-                                    'reqid': params.reqid,
-                                    'end': true});
-                            }
+        console.log('get_networks');
+        pool.getConnection()
+            .then(conn => {
+                conn.query('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' +
+                           'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync, ' +
+                           'block_num, block_time ' +
+                           'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network')
+                    .then((rows) => {
+                        let ret = {};
+                        for(let i=0; i<rows.length; i++) {
+                            ret[rows[i].network] = rows[i];
                         }
-                        catch(err) {
-                            reject(err);
-                        }
-                        conn.release();
-                    })();
-                });
-        }
+                        resolve(ret);
+                    })
+                    .catch(err => {
+                        console.log(err); 
+                        reject(err);
+                    });
+                conn.release();
+            });
     });
 });
 
-
-
-
+                            
 rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
     return new Promise( (resolve, reject) => {
         console.log('get_accounts_from_keys');
@@ -147,6 +108,9 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
                             else {
                                 resolve();
 
+                                let status = 200;
+                                let errstring = null;
+                                
                                 try {
                                     for(let i=0; i<params.keys.length; i++) {
                                         let key = params.keys[i];
@@ -177,12 +141,16 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
                                 }
                                 catch(err) {
                                     console.error(err);
+                                    status = 500;
+                                    errstring = err;
                                 }
 
                                 socket.notify('reqdata', {
                                     'method': 'get_accounts_from_keys',
                                     'reqid': params.reqid,
-                                    'end': true});
+                                    'end': true,
+                                    'status': status,
+                                    'error': errstring});
                             }
                         }
                         catch(err) {
@@ -194,6 +162,84 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
         }
     });
 });
+
+
+
+rpc.methods.set('get_balances', async (socket, params) => {
+    return new Promise( (resolve, reject) => {
+        console.log('get_balances');
+        if( params.reqid == undefined ) {
+            reject(new Error('Mising argument: reqid'));
+        }    
+        else if( params.network == undefined ) {
+            reject(new Error('Mising argument: network'));
+        }
+        else if( params.accounts == undefined ) {
+            reject(new Error('Mising argument: accounts'));
+        }
+        else if( typeof params.accounts !== 'object' || !Array.isArray(params.accounts) ) {
+            reject(new Error('accounts must be an array'));
+        }
+        else if( params.accounts.length > get_balances_max ) {
+            reject(new Error('Too many accounts. Maximum: ' + get_balances_max + ', requested: ' + params.accounts.length));
+        }
+        else {
+            pool.getConnection()
+                .then(conn => {
+                    (async () => {
+                        try {
+                            let netcnt = await conn.query(
+                                'SELECT count(*) as cnt FROM NETWORKS where network=?', [params.network]);
+                            
+                            if( netcnt[0].cnt == 0 ) {
+                                reject(new Error('Invalid network: ' + params.network));
+                            }
+                            else {
+                                resolve();
+
+                                let status = 200;
+                                let errstring = null;
+
+                                try {
+                                    for(let i=0; i<params.accounts.length; i++) {
+                                        let acc = params.accounts[i];
+                                        let tokens = await conn.query
+                                        ('SELECT contract, currency, CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' +
+                                         'FROM CURRENCY_BAL WHERE network=? AND account_name=?',
+                                         [params.network, acc]);
+                                        
+                                        socket.notify('reqdata', {
+                                            'method': 'get_balances',
+                                            'reqid': params.reqid,
+                                            'data': {account: acc, balances: tokens}});
+                                    }
+                                }
+                                catch(err) {
+                                    console.error(err);
+                                    status = 500;
+                                    errstring = err;
+                                }
+                                
+                                socket.notify('reqdata', {
+                                    'method': 'get_balances',
+                                    'reqid': params.reqid,
+                                    'end': true,
+                                    'status': status,
+                                    'error': errstring});
+                            }
+                        }
+                        catch(err) {
+                            reject(err);
+                        }
+                        conn.release();
+                    })();
+                });
+        }
+    });
+});
+
+
+
 
 
 
