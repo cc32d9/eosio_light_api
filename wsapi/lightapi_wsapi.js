@@ -5,6 +5,7 @@ var nconf = require('nconf');
 const RPCServer = require('jsonrpc2-ws').Server;
 const Numeric = require('eosjs/dist/eosjs-numeric');
 
+nconf.argv();
 
 nconf.defaults({
     'dbhost':     'localhost',
@@ -18,7 +19,6 @@ nconf.defaults({
     'get_accounts_from_keys_max': 100
 });
 
-nconf.env().argv();
 
 const pool = mariadb.createPool({
     host:       nconf.get('dbhost'),
@@ -52,7 +52,7 @@ rpc.on('connection', (socket, req) => {
 
 rpc.methods.set('get_networks', async (socket, params) => {
     return new Promise( (resolve, reject) => {
-        console.log('get_networks');
+        // console.log('get_networks');
         pool.getConnection()
             .then(conn => {
                 conn.query('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' +
@@ -78,7 +78,7 @@ rpc.methods.set('get_networks', async (socket, params) => {
                             
 rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
     return new Promise( (resolve, reject) => {
-        console.log('get_accounts_from_keys');
+        // console.log('get_accounts_from_keys');
         if( params.reqid == undefined ) {
             reject(new Error('Mising argument: reqid'));
         }    
@@ -167,7 +167,7 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
 
 rpc.methods.set('get_balances', async (socket, params) => {
     return new Promise( (resolve, reject) => {
-        console.log('get_balances');
+        // console.log('get_balances');
         if( params.reqid == undefined ) {
             reject(new Error('Mising argument: reqid'));
         }    

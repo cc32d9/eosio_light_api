@@ -150,6 +150,11 @@ cd /opt/eosio_light_api
 sudo mysql <sql/lightapi_dbcreate.sql
 sh setup/add_eos_mainnet.sh
 
+curl -sL https://deb.nodesource.com/setup_13.x | bash -
+apt install -y nodejs
+cd /opt/eosio_light_api/wsapi
+npm install
+
 vi /etc/default/lightapi_eos
 # add the Chronicle consumer socket details:
 # DBWRITE_OPTS=--port=8100
@@ -160,6 +165,7 @@ vi /etc/default/lightapi_eos
 cd systemd
 sh install_systemd_dbwrite.sh eos
 sh install_systemd_api.sh
+sh install_systemd_wsapi.sh 5101 5102 5103 5104 5105
 
 # Now Starman is serving HTTP requests and you can build your HTTP service
 # with nginx or exposing Starman directly
@@ -170,10 +176,6 @@ cat >/etc/cron.d/lightapi <<'EOT'
 */5 * * * * root perl /opt/eosio_light_api/scripts/lightapi_holdercounts.pl
 EOT
 
-curl -sL https://deb.nodesource.com/setup_13.x | bash -
-apt install -y nodejs
-cd /opt/eosio_light_api/wsapi
-npm install
 
 ```
 

@@ -1,0 +1,21 @@
+[Unit]
+Description=lightapi Websocket API
+
+[Service]
+Type=simple
+Environment="LIGHTAPI_HOME=/opt/eosio_light_api"
+Environment="HTTPHOST=0.0.0.0"
+EnvironmentFile=-/etc/default/lightapi_wsapi
+ExecStart=/usr/bin/node ${LIGHTAPI_HOME}/wsapi/lightapi_wsapi.js --httpport %i --httphost ${HTTPHOST}
+TimeoutSec=45s
+Restart=always
+User=root
+Group=daemon
+KillMode=control-group
+
+
+
+[Install]
+WantedBy=multi-user.target
+
+

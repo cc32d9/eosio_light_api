@@ -2,7 +2,7 @@
 
 const RPCClient = require('jsonrpc2-ws').Client;
 
-const client = new RPCClient('ws://localhost:5010/');
+const client = new RPCClient('wss://lightapi.eosgeneva.io/wsapi');
 
 
 client.on('connected', () => { console.log('connected'); });
