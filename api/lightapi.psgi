@@ -38,7 +38,6 @@ my $sth_keys;
 my $sth_authacc;
 my $sth_auth_upd;
 my $sth_acc_auth_upd;
-my $sth_network_auth_upd;
 my $sth_linkauth;
 my $sth_linkauth_upd;
 my $sth_delegated_from;
@@ -57,7 +56,7 @@ my $sth_searchcode;
 my $sth_sync;
 my $sth_all_sync;
 
-my $json = JSON->new()->canonical;
+my $json = JSON->new();
 my $jsonp = JSON->new()->pretty->canonical;
 
 
@@ -212,10 +211,6 @@ sub check_dbserver
             ('SELECT perm, jsdata, deleted ' .
              'FROM UPD_AUTH WHERE network=? AND account_name=? ORDER BY id');
 
-        $sth_network_auth_upd = $dbh->prepare
-            ('SELECT account_name, jsdata, deleted ' .
-             'FROM UPD_AUTH WHERE network=? and perm=? ORDER BY id');
-        
         $sth_linkauth = $dbh->prepare
             ('SELECT code, type, requirement ' .
              'FROM LINKAUTH ' .
@@ -267,9 +262,9 @@ sub check_dbserver
              'WHERE network=? AND actor=? AND permission=? LIMIT 100');
 
         $sth_stream_searchkey = $dbh->prepare
-            ('SELECT account_name, weight ' .
+            ('SELECT account_name, perm, pubkey, weight ' .
              'FROM AUTH_KEYS ' .
-             'WHERE network=? AND pubkey=? AND perm=?');
+             'WHERE network=? AND pubkey=?');
         
         $sth_usercount = $dbh->prepare
             ('SELECT count(*) as usercount FROM USERRES WHERE network=?');
@@ -1373,121 +1368,7 @@ $builder->mount
      });
 
 
-#####################
-###  SSE streaming API
 
-sub get_writer
-{
-    my $responder = shift;
-    return $responder->
-        (
-         [
-          200,
-          [
-           'Content-Type' => 'text/event-stream; charset=UTF-8',
-           'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
-          ]
-         ]
-        );
-}
-
-
-sub send_event
-{
-    my $writer = shift;
-    my $event = shift;
-
-    my @lines;
-    while( scalar(@{$event}) > 0 )
-    {
-        push(@lines, shift(@{$event}) . ': ' . shift(@{$event}));
-    }
-    
-    $writer->write(join("\x0d\x0a", @lines) . "\x0d\x0a\x0d\x0a");
-}
-
-
-
-$builder->mount
-    ('/api/sse/balances_by_key' => sub {
-         my $env = shift;
-         my $req = Plack::Request->new($env);
-         my $p = $req->parameters();
-         
-         my $network = $p->{'network'};
-         return(error($req, "'network' is not specified")) unless defined($network);
-         return(error($req, "invalid network")) unless ($network =~ /^\w+$/);
-
-         my $key = $p->{'key'};
-         return(error($req, "'key' is not specified")) unless defined($key);
-         return(error($req, "invalid key")) unless ($key =~ /^\w+$/);
-         $key = from_legacy_key($key);
-
-         check_dbserver();
-         if ( not defined(get_network($network)) ) {
-             return(error($req, 'Unknown network name: ' . $network));
-         }
-
-         return sub {
-             my $responder = shift;
-             my $writer = get_writer($responder);
-
-             my $count = 0;
-             my %seen;
-
-             foreach my $perm ('active', 'owner') {
-                 $sth_stream_searchkey->execute($network, $key, $perm);
-                 while( my $row = $sth_stream_searchkey->fetchrow_hashref() ) {
-                     my $acc = $row->{'account_name'};
-                     next if $seen{$acc};
-                     $seen{$acc} = 1;
-                     
-                     my $result = {'account' => $row};
-                     $result->{'account'}{'perm'} = $perm;
-                     get_balances($result, $network, $acc);
-                     
-                     my $event = ['event', 'account_balances', 'id', $acc];
-                     
-                     push(@{$event}, 'data', $json->encode($result));
-                     send_event($writer, $event);
-                     $count++;
-                 }
-             }
-
-             foreach my $perm ('active', 'owner') {
-                 $sth_network_auth_upd->execute($network, $perm);
-                 while( my $row = $sth_network_auth_upd->fetchrow_hashref() ) {
-                     next if $row->{'deleted'};
-                     my $auth = $json->decode($row->{'jsdata'});
-                     foreach my $keydata (@{$auth->{'keys'}})
-                     {
-                         if( $keydata->{'key'} eq $key )
-                         {
-                             my $acc = $row->{'account_name'};
-                             next if $seen{$acc};
-                             $seen{$acc} = 1;
-                             
-                             my $result = {'account' =>
-                                           {'account_name' => $acc,
-                                            'perm' => $perm,
-                                            'weight' => 0+$keydata->{'weight'}}};
-                             
-                             get_balances($result, $network, $acc);
-                             
-                             my $event = ['event', 'account_balances', 'id', $acc];
-                             
-                             push(@{$event}, 'data', $json->encode($result));
-                             send_event($writer, $event);
-                             $count++;
-                         }
-                     }
-                 }
-             }
-                         
-             send_event($writer, ['event', 'end', 'data', $json->encode({'count' => $count})]);
-             $writer->close();
-         };
-     });
 
 $builder->to_app;
 
