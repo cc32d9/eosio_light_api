@@ -1407,27 +1407,6 @@ sub send_event
 }
 
 
-sub end_normal
-{
-    my $writer = shift;
-    my $count = shift;
-    
-    send_event($writer, ['event', 'end', 'data', $json->encode({'count' => $count,
-                                                                'reason' => 'ok'})]);
-    $writer->close();
-}
-    
-sub end_timeout
-{
-    my $writer = shift;
-    my $count = shift;
-    
-    send_event($writer, ['event', 'end', 'data', $json->encode({'count' => $count,
-                                                                'reason' => 'timeout'})]);
-    $writer->close();
-}
-
-
 
 $builder->mount
     ('/api/sse/balances_by_key' => sub {
@@ -1455,7 +1434,6 @@ $builder->mount
 
              my $count = 0;
              my %seen;
-             my $timeout = time() + 60;
 
              foreach my $perm ('active', 'owner') {
                  $sth_stream_searchkey->execute($network, $key, $perm);
@@ -1473,10 +1451,6 @@ $builder->mount
                      push(@{$event}, 'data', $json->encode($result));
                      send_event($writer, $event);
                      $count++;
-
-                     if( time() > $timeout ) {
-                         return end_timeout($writer, $count);
-                     }
                  }
              }
 
@@ -1505,16 +1479,13 @@ $builder->mount
                              push(@{$event}, 'data', $json->encode($result));
                              send_event($writer, $event);
                              $count++;
-
-                             if( time() > $timeout ) {
-                                 return end_timeout($writer, $count);
-                             }
                          }
                      }
                  }
              }
-
-             end_normal($writer, $count);
+                         
+             send_event($writer, ['event', 'end', 'data', $json->encode({'count' => $count})]);
+             $writer->close();
          };
      });
 
