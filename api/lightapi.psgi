@@ -48,7 +48,6 @@ my $sth_get_code;
 my $sth_get_code_upd;
 my $sth_searchkey;
 my $sth_acc_by_actor;
-my $sth_stream_searchkey;
 my $sth_usercount;
 my $sth_topram;
 my $sth_topstake;
@@ -261,11 +260,6 @@ sub check_dbserver
              'FROM AUTH_ACC ' .
              'WHERE network=? AND actor=? AND permission=? LIMIT 100');
 
-        $sth_stream_searchkey = $dbh->prepare
-            ('SELECT account_name, perm, pubkey, weight ' .
-             'FROM AUTH_KEYS ' .
-             'WHERE network=? AND pubkey=?');
-        
         $sth_usercount = $dbh->prepare
             ('SELECT count(*) as usercount FROM USERRES WHERE network=?');
 
