@@ -82,6 +82,10 @@ Websocket API is complimentary to HTTP API and is designed for bulk
 requests. All communication is compliant with [JSON-RPC version
 2.0](https://www.jsonrpc.org/specification).
 
+The client is expected to close the websoclet connection after it
+finishes using it. The server sends periodic websocket ping requests
+and terminates the connection if the client fails to respond.
+
 Bulk methods `get_accounts_from_keys` and `get_balances` require a
 parameter `reqid`. The requests return immediately, and the API starts
 sending RPC notifications. Each notification has the following fields:
