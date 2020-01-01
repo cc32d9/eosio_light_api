@@ -1,11 +1,11 @@
 # EOSIO Light API
 
-## API description
-
 The API is providing information about EOSIO blockchain accounts and
 token balances. It is deployed for several blockchains, such as EOS,
 Telos, BOS, WAX, and Europechain. Also an endpoint for Jungle testnet is
 available.
+
+## HTTP API
 
 In below examples, "eos" stands for the name of the network where API is
 taking the data.
@@ -76,6 +76,61 @@ taking the data.
 In addition, adding `?pretty=1` to the URL, you get the resulting JSON
 sorted and formatted for human viewing.
 
+## Websocket API
+
+Websocket API is complimentary to HTTP API and is designed for bulk
+requests. All communication is compliant with [JSON-RPC version
+2.0](https://www.jsonrpc.org/specification).
+
+Bulk methods `get_accounts_from_keys` and `get_balances` require a
+parameter `reqid`. The requests return immediately, and the API starts
+sending RPC notifications. Each notification has the following fields:
+
+* `method`: the original RPC method that caused the notification;
+
+* `reqid`: the same value as was passed in `reqid` when calling the
+  request;
+
+* `data`: row of data according to request. It is omitted when `end`
+  is `true`;
+
+* `end`: if present and is `true`, this is the last notification for
+  this `reqid`. Additional fields `status` and `error` are delivered
+  to indicate the success of operation.
+
+* `status`: only present in the end notification. Value 200 indicates
+  success, and 500 indicates an error.
+
+* `error`: only present in the end notification. In case of success,
+  this field is set to `null`, and contains an error message
+  otherwise.
+
+Notifications are sent asynchronously, and if multiple requests are
+being served, the order of interleaving is random. But within each
+`reqid` the order of messages is guaranteed to have `end` message as
+the last one.
+
+
+RPC methods:
+
+* `get_networks` does not require any parameters, and returns a map of
+  network name as key and a map of `network, chainid, description,
+  systoken, decimals, production` as value.
+
+* `get_accounts_from_keys` requires the following parameters: `reqid`,
+  `network`, `keys` (array of public keys to search for, up to 100
+  keys). The method generates notifications with `account_name, perm,
+  weight, pubkey` in data field. Both legacy and new format of keys
+  are supported.
+
+* `get_balances` requires the following parameters: `reqid`,
+  `network`, `accounts` (array of account names, up to 100
+  accounts). The method generates notifications with `account,
+  balances` in the data field, where balances are in an array of maps
+  with `contract, currency, amount, decimals` keys.
+
+
+## User support
 
 User discussion and support in Telegram: https://t.me/lightapi
 
