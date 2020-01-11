@@ -80,13 +80,13 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
     return new Promise( (resolve, reject) => {
         // console.log('get_accounts_from_keys');
         if( params.reqid == undefined ) {
-            reject(new Error('Mising argument: reqid'));
+            reject(new Error('Missing argument: reqid'));
         }    
         else if( params.network == undefined ) {
-            reject(new Error('Mising argument: network'));
+            reject(new Error('Missing argument: network'));
         }
         else if( params.keys == undefined ) {
-            reject(new Error('Mising argument: keys'));
+            reject(new Error('Missing argument: keys'));
         }
         else if( typeof params.keys !== 'object' || !Array.isArray(params.keys) ) {
             reject(new Error('keys must be an array'));
@@ -169,13 +169,13 @@ rpc.methods.set('get_balances', async (socket, params) => {
     return new Promise( (resolve, reject) => {
         // console.log('get_balances');
         if( params.reqid == undefined ) {
-            reject(new Error('Mising argument: reqid'));
+            reject(new Error('Missing argument: reqid'));
         }    
         else if( params.network == undefined ) {
-            reject(new Error('Mising argument: network'));
+            reject(new Error('Missing argument: network'));
         }
         else if( params.accounts == undefined ) {
-            reject(new Error('Mising argument: accounts'));
+            reject(new Error('Missing argument: accounts'));
         }
         else if( typeof params.accounts !== 'object' || !Array.isArray(params.accounts) ) {
             reject(new Error('accounts must be an array'));
