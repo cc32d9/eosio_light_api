@@ -584,18 +584,26 @@ sub get_rexbalances
         my $now = DateTime->now('time_zone' => 'UTC');
         
         foreach my $enry (@{$rex->{'bal'}{'rex_maturities'}}) {
-            my $mt = DateTime::Format::ISO8601->parse_datetime($enry->{'first'});
+            my $key = $enry->{'key'};
+            my $val = $enry->{'value'};
+            if( not defined($key) ) {
+                $key = $enry->{'first'};
+                $val = $enry->{'second'};
+            }
+            next unless (defined($key) and defined($val));
+            
+            my $mt = DateTime::Format::ISO8601->parse_datetime($key);
             $mt->set_time_zone('UTC');
 
             if( DateTime->compare($mt, $now) <= 0 ) {
-                $matured_rex += $enry->{'second'};
+                $matured_rex += $val;
             }
             else {
                 if( DateTime->compare($mt, $end_of_time) == 0 ) {
-                    $savings_rex += $enry->{'second'};
+                    $savings_rex += $val;
                 }
                 else {
-                    $maturing_rex += $enry->{'second'};
+                    $maturing_rex += $val;
                 }
             }
         }
