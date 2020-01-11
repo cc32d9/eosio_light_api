@@ -133,6 +133,10 @@ RPC methods:
   balances` in the data field, where balances are in an array of maps
   with `contract, currency, amount, decimals` keys.
 
+* `get_token_holders` requires the following parameters: `reqid`,
+  `network`, `contract` and `currency`. The method generates
+  notifications with `account, amount` in the data field, returning
+  all token holders and their balances.
 
 ## User support
 

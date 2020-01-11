@@ -240,6 +240,102 @@ rpc.methods.set('get_balances', async (socket, params) => {
 
 
 
+rpc.methods.set('get_token_holders', async (socket, params) => {
+    return new Promise( (resolve, reject) => {
+        // console.log('get_token_holders');
+        if( params.reqid == undefined ) {
+            reject(new Error('Missing argument: reqid'));
+        }    
+        else if( params.network == undefined ) {
+            reject(new Error('Missing argument: network'));
+        }
+        else if( params.contract == undefined ) {
+            reject(new Error('Missing argument: contract'));
+        }
+        else if( params.currency == undefined ) {
+            reject(new Error('Missing argument: currency'));
+        }
+        else {
+            pool.getConnection()
+                .then(conn => {
+                    (async () => {
+                        try {
+                            let netcnt = await conn.query(
+                                'SELECT count(*) as cnt FROM NETWORKS where network=?', [params.network]);
+                            
+                            if( netcnt[0].cnt == 0 ) {
+                                reject(new Error('Invalid network: ' + params.network));
+                            }
+                            else {
+                                resolve();
+
+                                let status = 200;
+                                let errstring = null;
+
+                                try {
+                                    await new Promise( (resolve, reject) => {
+                                        conn.queryStream('SELECT account_name AS acc, ' +
+                                                         'CAST(amount AS CHAR ASCII) AS amount, decimals ' +
+                                                         'FROM CURRENCY_BAL WHERE network=? AND contract=? AND currency=?',
+                                                         [params.network, params.contract, params.currency])
+                                            .on("error", err => {
+                                                console.error(err);
+                                                reject();
+                                            })
+                                            .on("data", row => {
+                                                socket.notify('reqdata', {
+                                                    'method': 'get_token_holders',
+                                                    'reqid': params.reqid,
+                                                    'data': {account: row.acc, amount: apply_decimals(row.amount, row.decimals)}});
+                                            })
+                                            .on("end", () => {
+                                                resolve();
+                                            });
+                                    });
+                                    
+                                }
+                                catch(err) {
+                                    console.error(err);
+                                    status = 500;
+                                    errstring = err;
+                                }
+                                
+                                socket.notify('reqdata', {
+                                    'method': 'get_token_holders',
+                                    'reqid': params.reqid,
+                                    'end': true,
+                                    'status': status,
+                                    'error': errstring});
+                            }
+                        }
+                        catch(err) {
+                            reject(err);
+                        }
+                        conn.release();
+                    })();
+                });
+        }
+    });
+});
+
+
+
+// =========== utility functions ===========
+
+function apply_decimals(amt, decimals) {
+    let pos = amt.indexOf('.');
+    if( pos < 0 ) {
+        amt = amt.concat('.');
+    } else {
+        decimals -= amt.length - pos - 1;
+        if( decimals < 0 ) { decimals = 0; }
+    }
+    return amt.concat('0'.repeat(decimals));
+}
+
+
+
+
 
 
 
