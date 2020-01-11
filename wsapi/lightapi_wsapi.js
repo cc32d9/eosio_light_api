@@ -203,15 +203,23 @@ rpc.methods.set('get_balances', async (socket, params) => {
                                 try {
                                     for(let i=0; i<params.accounts.length; i++) {
                                         let acc = params.accounts[i];
-                                        let tokens = await conn.query
-                                        ('SELECT contract, currency, CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' +
+                                        let balances = await conn.query
+                                        ('SELECT contract, currency, CAST(amount AS CHAR ASCII) AS amount, decimals ' +
                                          'FROM CURRENCY_BAL WHERE network=? AND account_name=?',
                                          [params.network, acc]);
+
+                                        let ret_balances = new Array();
+                                        for(let j=0; j<balances.length; j++) {
+                                            let b = balances[j];
+                                            ret_balances.push({contract: b.contract,
+                                                               currency: b.currency,
+                                                               amount: apply_decimals(b.amount, b.decimals)});
+                                        }
                                         
                                         socket.notify('reqdata', {
                                             'method': 'get_balances',
                                             'reqid': params.reqid,
-                                            'data': {account: acc, balances: tokens}});
+                                            'data': {account: acc, balances: ret_balances}});
                                     }
                                 }
                                 catch(err) {
@@ -323,6 +331,10 @@ rpc.methods.set('get_token_holders', async (socket, params) => {
 // =========== utility functions ===========
 
 function apply_decimals(amt, decimals) {
+    if( decimals == 0 ) {
+        return amt;
+    }
+    
     let pos = amt.indexOf('.');
     if( pos < 0 ) {
         amt = amt.concat('.');

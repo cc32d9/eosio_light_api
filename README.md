@@ -114,6 +114,9 @@ being served, the order of interleaving is random. But within each
 `reqid` the order of messages is guaranteed to have `end` message as
 the last one.
 
+Methods that return token balances deliver the amounts as strings with
+exact number of decimals as specified in the token contract.
+
 
 RPC methods:
 
@@ -131,12 +134,13 @@ RPC methods:
   `network`, `accounts` (array of account names, up to 100
   accounts). The method generates notifications with `account,
   balances` in the data field, where balances are in an array of maps
-  with `contract, currency, amount, decimals` keys.
+  with `contract, currency, amount` keys.
 
 * `get_token_holders` requires the following parameters: `reqid`,
   `network`, `contract` and `currency`. The method generates
   notifications with `account, amount` in the data field, returning
   all token holders and their balances.
+
 
 ## User support
 
