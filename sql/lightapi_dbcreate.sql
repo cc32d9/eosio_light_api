@@ -284,6 +284,7 @@ CREATE TABLE FIO_DOMAIN
  id                BIGINT NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
  fio_domain        VARCHAR(62) NOT NULL,
+ is_public         TINYINT NOT NULL,
  expiration        DATETIME NOT NULL,
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL
@@ -354,6 +355,7 @@ CREATE TABLE UPD_FIO_DOMAIN
  domain_id         BIGINT NOT NULL,
  account_name      VARCHAR(13) NOT NULL,
  fio_domain        VARCHAR(62) NOT NULL,
+ is_public         TINYINT NOT NULL,
  expiration        DATETIME NOT NULL,
  block_num         BIGINT NOT NULL,
  block_time        DATETIME NOT NULL,

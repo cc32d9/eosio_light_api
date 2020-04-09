@@ -54,6 +54,7 @@ my $rex_enabled;
 my $confirmed_block = 0;
 my $unconfirmed_block = 0;
 my $irreversible = 0;
+my $have_updates = 0;
 
 getdb();
 {
@@ -140,6 +141,7 @@ sub process_data
         $db->{'dbh'}->commit();
         $confirmed_block = $block_num-1;
         $unconfirmed_block = $block_num-1;
+        $have_updates = $block_num-1;
         return $confirmed_block;
     }
     elsif( $msgtype == 1007 ) # CHRONICLE_MSGTYPE_TBL_ROW
@@ -171,6 +173,7 @@ sub process_data
                             ($network, $kvo->{'scope'}, $data->{'block_num'}, $block_time,
                              $kvo->{'code'}, $currency, $amount, $decimals,
                              ($data->{'added'} eq 'true')?0:1);
+                        $have_updates = $data->{'block_num'};
                     }
                 }
             }
@@ -181,6 +184,7 @@ sub process_data
                 $block_time =~ s/T/ /;
                 my $table = $kvo->{'table'};
                 my $added = ($data->{'added'} eq 'true')?0:1;
+                $have_updates = $block_num;
                 
                 if( $table eq 'fionames' )
                 {
@@ -211,7 +215,7 @@ sub process_data
                                                    'time_zone' => 'UTC')->datetime(' ');
                     $db->{'sth_upd_fio_domain'}->execute
                         ($network, $kvo->{'value'}{'id'}, $kvo->{'value'}{'account'},
-                         $kvo->{'value'}{'name'}, $exp, 
+                         $kvo->{'value'}{'name'}, $kvo->{'value'}{'is_public'}, $exp, 
                          $block_num, $block_time, $added);
                 }
                 elsif( $table eq 'accountmap' )
@@ -228,6 +232,7 @@ sub process_data
         my $permission = $data->{'permission'};
         my $block_num = $data->{'block_num'};
         my $block_time = $data->{'block_timestamp'};
+        $have_updates = $block_num;
 
         if( $data->{'added'} eq 'true' )
         {
@@ -247,6 +252,7 @@ sub process_data
     {
         my $block_num = $data->{'block_num'};
         my $block_time = $data->{'block_timestamp'};
+        $have_updates = $block_num;
         $db->{'sth_upd_linkauth'}->execute
             ($network,
              map({$data->{'permission_link'}{$_}} qw(account code message_type required_permission)),
@@ -257,6 +263,7 @@ sub process_data
     {
         my $block_num = $data->{'block_num'};
         my $block_time = $data->{'block_timestamp'};
+        $have_updates = $block_num;
 
         my $hash = '';
         my $deleted = 1;
@@ -295,8 +302,14 @@ sub process_data
         $db->{'sth_upd_sync_head'}->execute($block_num, $block_time, $last_irreversible, $network);
         $db->{'dbh'}->commit();
 
-        if( $block_num <= $last_irreversible or $last_irreversible > $irreversible )
+        if( $have_updates and ($block_num <= $last_irreversible or $last_irreversible > $irreversible) )
         {
+            print STDERR ".";
+            if( $have_updates <= $last_irreversible )
+            {
+                $have_updates = 0;
+            }
+                
             ## currency balances
             my $changes = 0;
             $db->{'sth_get_upd_currency'}->execute($network, $last_irreversible);
@@ -476,8 +489,8 @@ sub process_data
                 {
                     $db->{'sth_save_fio_domain'}->execute
                         ($network, map {$r->{$_}}
-                         qw(name_id account_name fio_domain expiration block_num block_time
-                         account_name expiration block_num block_time));
+                         qw(name_id account_name fio_domain is_public expiration block_num block_time
+                         account_name is_public expiration block_num block_time));
                 }
             }
 
@@ -494,16 +507,9 @@ sub process_data
             while(my $r = $db->{'sth_get_upd_fio_clientkey'}->fetchrow_hashref('NAME_lc'))
             {
                 $changes = 1;
-                if( $r->{'deleted'} )
-                {
-                    $db->{'sth_erase_fio_clientkey'}->execute($network, $r->{'domain_id'});
-                }
-                else
-                {
-                    $db->{'sth_save_fio_clientkey'}->execute
-                        ($network, map {$r->{$_}}
-                         qw(account_name clientkey block_num block_time));
-                }
+                $db->{'sth_save_fio_clientkey'}->execute
+                    ($network, map {$r->{$_}}
+                     qw(account_name clientkey block_num block_time));
             }
 
             if( $changes )
@@ -752,12 +758,12 @@ sub getdb
     
     $db->{'sth_upd_fio_domain'} = $dbh->prepare
         ('INSERT INTO UPD_FIO_DOMAIN ' . 
-         '(network, domain_id, account_name, fio_domain, expiration, ' .
+         '(network, domain_id, account_name, fio_domain, is_public, expiration, ' .
          'block_num, block_time, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?,?)');
+         'VALUES(?,?,?,?,?,?,?,?,?)');
 
     $db->{'sth_get_upd_fio_domain'} = $dbh->prepare
-        ('SELECT domain_id, account_name, fio_domain, expiration, ' .
+        ('SELECT domain_id, account_name, fio_domain, is_public, expiration, ' .
          'block_num, block_time, deleted ' .
          'FROM UPD_FIO_DOMAIN WHERE network = ? AND block_num <= ? ORDER BY id');
     
@@ -767,11 +773,11 @@ sub getdb
     
     $db->{'sth_save_fio_domain'} = $dbh->prepare
         ('INSERT INTO FIO_DOMAIN ' .
-         '(network, id, account_name, fio_domain, expiration, ' .
+         '(network, id, account_name, fio_domain, is_public, expiration, ' .
          'block_num, block_time) ' .
-         'VALUES(?,?,?,?,?,?,?) ' .
+         'VALUES(?,?,?,?,?,?,?,?) ' .
          'ON DUPLICATE KEY UPDATE ' .
-         'account_name=?, expiration=?, block_num=?, block_time=?');
+         'account_name=?, is_public=?, expiration=?, block_num=?, block_time=?');
 
     $db->{'sth_del_upd_fio_domain'} = $dbh->prepare
         ('DELETE FROM UPD_FIO_DOMAIN WHERE network = ? AND block_num <= ?');    
