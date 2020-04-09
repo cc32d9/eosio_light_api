@@ -6,6 +6,7 @@ use DBI;
 use Net::WebSocket::Server;
 use Protocol::WebSocket::Frame;
 use Digest::SHA qw(sha256_hex);
+use DateTime;
 
 $Protocol::WebSocket::Frame::MAX_PAYLOAD_SIZE = 100*1024*1024;
 $Protocol::WebSocket::Frame::MAX_FRAGMENTS_AMOUNT = 102400;
@@ -131,12 +132,11 @@ sub process_data
         $db->{'sth_fork_currency'}->execute($network, $block_num);
         $db->{'sth_fork_auth'}->execute($network, $block_num);
         $db->{'sth_fork_linkauth'}->execute($network, $block_num);
-        $db->{'sth_fork_delband'}->execute($network, $block_num);
         $db->{'sth_fork_codehash'}->execute($network, $block_num);
-        $db->{'sth_fork_userres'}->execute($network, $block_num);
-        $db->{'sth_fork_rexfund'}->execute($network, $block_num);
-        $db->{'sth_fork_rexbal'}->execute($network, $block_num);
-        $db->{'sth_fork_rexpool'}->execute($network, $block_num);
+        $db->{'sth_fork_fio_name'}->execute($network, $block_num);
+        $db->{'sth_fork_fio_tokenpubaddr'}->execute($network, $block_num);
+        $db->{'sth_fork_fio_domain'}->execute($network, $block_num);
+        $db->{'sth_fork_fio_clientkey'}->execute($network, $block_num);
         $db->{'dbh'}->commit();
         $confirmed_block = $block_num-1;
         $unconfirmed_block = $block_num-1;
@@ -174,69 +174,51 @@ sub process_data
                     }
                 }
             }
-            elsif( $kvo->{'code'} eq 'eosio' )
+            elsif( $kvo->{'code'} eq 'fio.address' )
             {
-                if( $kvo->{'table'} eq 'delband' )
+                my $block_num = $data->{'block_num'};
+                my $block_time = $data->{'block_timestamp'};
+                $block_time =~ s/T/ /;
+                my $table = $kvo->{'table'};
+                my $added = ($data->{'added'} eq 'true')?0:1;
+                
+                if( $table eq 'fionames' )
                 {
-                    my ($cpu, $curr1) = split(/\s/, $kvo->{'value'}{'cpu_weight'});
-                    my ($net, $curr2) = split(/\s/, $kvo->{'value'}{'net_weight'});
-                    my $block_time = $data->{'block_timestamp'};
-                    $block_time =~ s/T/ /;
+                    my $id = $kvo->{'value'}{'id'};
+                    my $exp = DateTime->from_epoch('epoch' => $kvo->{'value'}{'expiration'},
+                                                   'time_zone' => 'UTC')->datetime(' ');
                     
-                    $db->{'sth_upd_delband'}->execute
-                        ($network, $kvo->{'value'}{'to'}, $data->{'block_num'}, $block_time,
-                         $kvo->{'value'}{'from'}, $cpu*$precision, $net*$precision,
-                         ($data->{'added'} eq 'true')?0:1);
+                    $db->{'sth_upd_fio_name'}->execute
+                        ($network, $id, $kvo->{'value'}{'owner_account'},
+                         $kvo->{'value'}{'name'}, $kvo->{'value'}{'domain'},
+                         $exp, $kvo->{'value'}{'bundleeligiblecountdown'},
+                         $block_num, $block_time, $added);
+
+                    if( $added )
+                    {
+                        foreach my $addr (@{$kvo->{'value'}{'addresses'}})
+                        {
+                            $db->{'sth_upd_fio_tokenpubaddr'}->execute
+                                ($network, $id,
+                                 $addr->{'token_code'}, $addr->{'chain_code'}, $addr->{'public_address'},
+                                 $block_num, $block_time);
+                        }
+                    }
                 }
-                elsif( $kvo->{'table'} eq 'userres' )
+                elsif( $table eq 'domains' )
                 {
-                    my ($cpu, $curr1) = split(/\s/, $kvo->{'value'}{'cpu_weight'});
-                    my ($net, $curr2) = split(/\s/, $kvo->{'value'}{'net_weight'});
-                    my $block_time = $data->{'block_timestamp'};
-                    $block_time =~ s/T/ /;
-                    
-                    $db->{'sth_upd_userres'}->execute
-                        ($network, $kvo->{'value'}{'owner'}, $data->{'block_num'}, $block_time,
-                         $cpu*$precision, $net*$precision, $kvo->{'value'}{'ram_bytes'},
-                         ($data->{'added'} eq 'true')?0:1);
+                    my $exp = DateTime->from_epoch('epoch' => $kvo->{'value'}{'expiration'},
+                                                   'time_zone' => 'UTC')->datetime(' ');
+                    $db->{'sth_upd_fio_domain'}->execute
+                        ($network, $kvo->{'value'}{'id'}, $kvo->{'value'}{'account'},
+                         $kvo->{'value'}{'name'}, $exp, 
+                         $block_num, $block_time, $added);
                 }
-                elsif( $kvo->{'table'} eq 'rexfund' )
+                elsif( $table eq 'accountmap' )
                 {
-                    my ($bal, $curr1) = split(/\s/, $kvo->{'value'}{'balance'});
-                    my $block_time = $data->{'block_timestamp'};
-                    $block_time =~ s/T/ /;
-                    
-                    $db->{'sth_upd_rexfund'}->execute
-                        ($network, $kvo->{'value'}{'owner'}, $data->{'block_num'}, $block_time,
-                         $bal, ($data->{'added'} eq 'true')?0:1);
-                }
-                elsif( $kvo->{'table'} eq 'rexbal' )
-                {
-                    my ($vbal, $curr1) = split(/\s/, $kvo->{'value'}{'vote_stake'});
-                    my ($rbal, $curr2) = split(/\s/, $kvo->{'value'}{'rex_balance'});
-                    my $block_time = $data->{'block_timestamp'};
-                    $block_time =~ s/T/ /;
-                    
-                    $db->{'sth_upd_rexbal'}->execute
-                        ($network, $kvo->{'value'}{'owner'}, $data->{'block_num'}, $block_time,
-                         $vbal, $rbal, $kvo->{'value'}{'matured_rex'},
-                         $json->encode($kvo->{'value'}{'rex_maturities'}),
-                         ($data->{'added'} eq 'true')?0:1);
-                }
-                elsif( $kvo->{'table'} eq 'rexpool' )
-                {
-                    my ($tlent, $curr1) = split(/\s/, $kvo->{'value'}{'total_lent'});
-                    my ($tunlent, $curr2) = split(/\s/, $kvo->{'value'}{'total_unlent'});
-                    my ($trent, $curr3) = split(/\s/, $kvo->{'value'}{'total_rent'});
-                    my ($tlendable, $curr4) = split(/\s/, $kvo->{'value'}{'total_lendable'});
-                    my ($trex, $curr5) = split(/\s/, $kvo->{'value'}{'total_rex'});
-                    my ($nbid, $curr6) = split(/\s/, $kvo->{'value'}{'namebid_proceeds'});
-                    my $block_time = $data->{'block_timestamp'};
-                    $block_time =~ s/T/ /;
-                    
-                    $db->{'sth_upd_rexpool'}->execute
-                        ($network, $data->{'block_num'}, $block_time,
-                         $tlent, $tunlent, $trent, $tlendable, $trex, $nbid, $kvo->{'value'}{'loan_num'});
+                    $db->{'sth_upd_fio_clientkey'}->execute
+                        ($network, $kvo->{'value'}{'account'}, $kvo->{'value'}{'clientkey'},
+                         $block_num, $block_time);
                 }
             }
         }
@@ -288,7 +270,6 @@ sub process_data
         $db->{'sth_upd_codehash'}->execute
             ($network, $data->{'account_metadata'}{'name'}, $block_num, $block_time,
              $hash, $deleted);
-
     }
     elsif( $msgtype == 1009 ) # CHRONICLE_MSGTYPE_RCVR_PAUSE
     {
@@ -416,32 +397,6 @@ sub process_data
             }
             
             
-            ## delegated bandwidth
-            $changes = 0;
-            $db->{'sth_get_upd_delband'}->execute($network, $last_irreversible);
-            while(my $r = $db->{'sth_get_upd_delband'}->fetchrow_hashref('NAME_lc'))
-            {
-                $changes = 1;
-                if( $r->{'deleted'} )
-                {
-                    $db->{'sth_erase_delband'}->execute
-                        ($network, $r->{'account_name'}, $r->{'del_from'});
-                }
-                else
-                {
-                    $db->{'sth_save_delband'}->execute
-                        ($network, map {$r->{$_}}
-                         qw(account_name del_from block_num block_time cpu_weight net_weight
-                            block_num block_time cpu_weight net_weight));
-                }
-            }
-
-            if( $changes )
-            {
-                $db->{'sth_del_upd_delband'}->execute($network, $last_irreversible);
-                $db->{'dbh'}->commit();
-            }
-
 
             ## setcode
             $changes = 0;
@@ -466,107 +421,95 @@ sub process_data
                 $db->{'sth_del_upd_codehash'}->execute($network, $last_irreversible);
                 $db->{'dbh'}->commit();
             }
+
+            ###### FIO
+
+            ## fio_name
+            $changes = 0;
+            $db->{'sth_get_upd_fio_name'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_fio_name'}->fetchrow_hashref('NAME_lc'))
+            {
+                $changes = 1;
+                if( $r->{'deleted'} )
+                {
+                    $db->{'sth_erase_fio_name'}->execute($network, $r->{'name_id'});
+                }
+                else
+                {
+                    $db->{'sth_save_fio_name'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(name_id account_name fio_name fio_domain expiration bdlelgcntdwn
+                         block_num block_time
+                         account_name expiration bdlelgcntdwn block_num block_time));
+                    
+                    $db->{'sth_erase_fio_tokenpubaddr'}->execute($network, $r->{'name_id'});
+                }
+            }
+
+            if( $changes )
+            {
+                $db->{'sth_get_upd_fio_tokenpubaddr'}->execute($network, $last_irreversible);
+                while(my $r = $db->{'sth_get_upd_fio_tokenpubaddr'}->fetchrow_hashref('NAME_lc'))
+                {
+                    $db->{'sth_save_fio_tokenpubaddr'}->execute
+                        ($network, map {$r->{$_}}
+                         qw(name_id token_code chain_code public_address));
+                }
+
+                $db->{'sth_del_upd_fio_name'}->execute($network, $last_irreversible);
+                $db->{'sth_del_upd_fio_tokenpubaddr'}->execute($network, $last_irreversible);
+                $db->{'dbh'}->commit();
+            }
             
-            ## userres
+
+            ## fio_domain
             $changes = 0;
-            $db->{'sth_get_upd_userres'}->execute($network, $last_irreversible);
-            while(my $r = $db->{'sth_get_upd_userres'}->fetchrow_hashref('NAME_lc'))
+            $db->{'sth_get_upd_fio_domain'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_fio_domain'}->fetchrow_hashref('NAME_lc'))
             {
                 $changes = 1;
                 if( $r->{'deleted'} )
                 {
-                    $db->{'sth_erase_userres'}->execute($network, $r->{'account_name'});
+                    $db->{'sth_erase_fio_domain'}->execute($network, $r->{'domain_id'});
                 }
                 else
                 {
-                    $db->{'sth_save_userres'}->execute
+                    $db->{'sth_save_fio_domain'}->execute
                         ($network, map {$r->{$_}}
-                         qw(account_name block_num block_time cpu_weight net_weight ram_bytes
-                            block_num block_time cpu_weight net_weight ram_bytes));
+                         qw(name_id account_name fio_domain expiration block_num block_time
+                         account_name expiration block_num block_time));
                 }
             }
 
             if( $changes )
             {
-                $db->{'sth_del_upd_userres'}->execute($network, $last_irreversible);
+                $db->{'sth_del_upd_fio_domain'}->execute($network, $last_irreversible);
                 $db->{'dbh'}->commit();
             }
+            
 
-            ## rexfund
+            ## fio_clientkey
             $changes = 0;
-            $db->{'sth_get_upd_rexfund'}->execute($network, $last_irreversible);
-            while(my $r = $db->{'sth_get_upd_rexfund'}->fetchrow_hashref('NAME_lc'))
+            $db->{'sth_get_upd_fio_clientkey'}->execute($network, $last_irreversible);
+            while(my $r = $db->{'sth_get_upd_fio_clientkey'}->fetchrow_hashref('NAME_lc'))
             {
                 $changes = 1;
                 if( $r->{'deleted'} )
                 {
-                    $db->{'sth_erase_rexfund'}->execute($network, $r->{'account_name'});
+                    $db->{'sth_erase_fio_clientkey'}->execute($network, $r->{'domain_id'});
                 }
                 else
                 {
-                    $db->{'sth_save_rexfund'}->execute
+                    $db->{'sth_save_fio_clientkey'}->execute
                         ($network, map {$r->{$_}}
-                         qw(account_name block_num block_time balance block_num block_time balance));
+                         qw(account_name clientkey block_num block_time));
                 }
             }
 
             if( $changes )
             {
-                $db->{'sth_del_upd_rexfund'}->execute($network, $last_irreversible);
+                $db->{'sth_del_upd_fio_clientkey'}->execute($network, $last_irreversible);
                 $db->{'dbh'}->commit();
-            }
-
-            ## rexbal
-            $changes = 0;
-            $db->{'sth_get_upd_rexbal'}->execute($network, $last_irreversible);
-            while(my $r = $db->{'sth_get_upd_rexbal'}->fetchrow_hashref('NAME_lc'))
-            {
-                $changes = 1;
-                if( $r->{'deleted'} )
-                {
-                    $db->{'sth_erase_rexbal'}->execute($network, $r->{'account_name'});
-                }
-                else
-                {
-                    $db->{'sth_save_rexbal'}->execute
-                        ($network, map {$r->{$_}}
-                         qw(account_name block_num block_time vote_stake rex_balance matured_rex
-                         rex_maturities block_num block_time vote_stake rex_balance matured_rex
-                         rex_maturities));
-                }
-            }
-
-            if( $changes )
-            {
-                $db->{'sth_del_upd_rexbal'}->execute($network, $last_irreversible);
-                $db->{'dbh'}->commit();
-            }
-
-            ## rexpool
-            $changes = 0;
-            $db->{'sth_get_upd_rexpool'}->execute($network, $last_irreversible);
-            while(my $r = $db->{'sth_get_upd_rexpool'}->fetchrow_hashref('NAME_lc'))
-            {
-                $changes = 1;
-                $db->{'sth_save_rexpool'}->execute
-                    ($network, map {$r->{$_}}
-                     qw(block_num block_time total_lent total_unlent total_rent total_lendable
-                     total_rex namebid_proceeds loan_num
-                     block_num block_time total_lent total_unlent total_rent total_lendable
-                     total_rex namebid_proceeds loan_num));
-            }
-
-            if( $changes )
-            {
-                $db->{'sth_del_upd_rexpool'}->execute($network, $last_irreversible);
-                $db->{'dbh'}->commit();
-
-                if( not $rex_enabled )
-                {
-                    $db->{'dbh'}->do('UPDATE NETWORKS SET rex_enabled=1 WHERE network=\'' . $network . '\'');
-                    $db->{'dbh'}->commit();
-                    $rex_enabled = 1;
-                }                    
             }
             
             $irreversible = $last_irreversible;
@@ -614,24 +557,9 @@ sub getdb
     $db->{'sth_fork_linkauth'} = $dbh->prepare
         ('DELETE FROM UPD_LINKAUTH WHERE network = ? AND block_num >= ? ');
     
-    $db->{'sth_fork_delband'} = $dbh->prepare
-        ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num >= ? ');
-
     $db->{'sth_fork_codehash'} = $dbh->prepare
         ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num >= ? ');
 
-    $db->{'sth_fork_userres'} = $dbh->prepare
-        ('DELETE FROM UPD_USERRES WHERE network = ? AND block_num >= ? ');
-
-    $db->{'sth_fork_rexfund'} = $dbh->prepare
-        ('DELETE FROM UPD_REXFUND WHERE network = ? AND block_num >= ? ');
-
-    $db->{'sth_fork_rexbal'} = $dbh->prepare
-        ('DELETE FROM UPD_REXBAL WHERE network = ? AND block_num >= ? ');
-
-    $db->{'sth_fork_rexpool'} = $dbh->prepare
-        ('DELETE FROM UPD_REXPOOL WHERE network = ? AND block_num >= ? ');
-    
     $db->{'sth_upd_currency'} = $dbh->prepare
         ('INSERT INTO UPD_CURRENCY_BAL ' . 
          '(network, account_name, block_num, block_time, contract, currency, amount, decimals, deleted) ' .
@@ -640,11 +568,6 @@ sub getdb
     $db->{'sth_upd_auth'} = $dbh->prepare
         ('INSERT INTO UPD_AUTH ' . 
          '(network, account_name, block_num, block_time, perm, parent, jsdata, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?,?)');
-
-    $db->{'sth_upd_delband'} = $dbh->prepare
-        ('INSERT INTO UPD_DELBAND ' . 
-         '(network, account_name, block_num, block_time, del_from, cpu_weight, net_weight, deleted) ' .
          'VALUES(?,?,?,?,?,?,?,?)');
 
     $db->{'sth_upd_codehash'} = $dbh->prepare
@@ -656,28 +579,6 @@ sub getdb
         ('INSERT INTO UPD_LINKAUTH ' . 
          '(network, account_name, code, type, requirement, block_num, block_time, deleted) ' .
          'VALUES(?,?,?,?,?,?,?,?)');
-    
-    $db->{'sth_upd_userres'} = $dbh->prepare
-        ('INSERT INTO UPD_USERRES ' . 
-         '(network, account_name, block_num, block_time, cpu_weight, net_weight, ram_bytes, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?,?)');
-
-    $db->{'sth_upd_rexfund'} = $dbh->prepare
-        ('INSERT INTO UPD_REXFUND ' . 
-         '(network, account_name, block_num, block_time, balance, deleted) ' .
-         'VALUES(?,?,?,?,?,?)');
-
-    $db->{'sth_upd_rexbal'} = $dbh->prepare
-        ('INSERT INTO UPD_REXBAL ' . 
-         '(network, account_name, block_num, block_time, vote_stake, rex_balance, matured_rex, ' . 
-         'rex_maturities, deleted) ' .
-         'VALUES(?,?,?,?,?,?,?,?,?)');
-
-    $db->{'sth_upd_rexpool'} = $dbh->prepare
-        ('INSERT INTO UPD_REXPOOL ' . 
-         '(network, block_num, block_time, total_lent, total_unlent, total_rent, total_lendable,
-         total_rex, namebid_proceeds, loan_num) ' .
-         'VALUES(?,?,?,?,?,?,?,?,?,?)');
     
     $db->{'sth_upd_sync_head'} = $dbh->prepare
         ('UPDATE SYNC SET block_num=?, block_time=?, irreversible=? WHERE network = ?');
@@ -767,24 +668,6 @@ sub getdb
         ('DELETE FROM UPD_LINKAUTH WHERE network = ? AND block_num <= ?');
     
 
-    
-    $db->{'sth_get_upd_delband'} = $dbh->prepare
-        ('SELECT account_name, block_num, block_time, del_from, cpu_weight, net_weight, deleted ' .
-         'FROM UPD_DELBAND WHERE network = ? AND block_num <= ? ORDER BY id');
-
-    $db->{'sth_erase_delband'} = $dbh->prepare
-        ('DELETE FROM DELBAND WHERE network = ? AND account_name = ? AND del_from = ?');
-    
-    $db->{'sth_save_delband'} = $dbh->prepare
-        ('INSERT INTO DELBAND ' .
-         '(network, account_name, del_from, block_num, block_time, cpu_weight, net_weight) ' .
-         'VALUES(?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, cpu_weight=?, net_weight=?');
-
-    $db->{'sth_del_upd_delband'} = $dbh->prepare
-        ('DELETE FROM UPD_DELBAND WHERE network = ? AND block_num <= ?');    
-
-
 
     $db->{'sth_get_upd_codehash'} = $dbh->prepare
         ('SELECT account_name, block_num, block_time, code_hash, deleted ' .
@@ -803,78 +686,118 @@ sub getdb
     $db->{'sth_del_upd_codehash'} = $dbh->prepare
         ('DELETE FROM UPD_CODEHASH WHERE network = ? AND block_num <= ?');    
 
+    ### FIO specifics
+
+    $db->{'sth_fork_fio_name'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_NAME WHERE network = ? AND block_num >= ? ');
+
+    $db->{'sth_upd_fio_name'} = $dbh->prepare
+        ('INSERT INTO UPD_FIO_NAME ' . 
+         '(network, name_id, account_name, fio_name, fio_domain, expiration, bdlelgcntdwn, ' .
+         'block_num, block_time, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?,?)');
+    
+    $db->{'sth_get_upd_fio_name'} = $dbh->prepare
+        ('SELECT name_id, account_name, fio_name, fio_domain, expiration, bdlelgcntdwn, ' .
+         'block_num, block_time, deleted ' .
+         'FROM UPD_FIO_NAME WHERE network = ? AND block_num <= ? ORDER BY id');
+    
+    $db->{'sth_erase_fio_name'} = $dbh->prepare
+        ('DELETE FROM FIO_NAME WHERE ' .
+         'network=? and id=?');
+    
+    $db->{'sth_save_fio_name'} = $dbh->prepare
+        ('INSERT INTO FIO_NAME ' .
+         '(network, id, account_name, fio_name, fio_domain, expiration, bdlelgcntdwn, ' .
+         'block_num, block_time) ' .
+         'VALUES(?,?,?,?,?,?,?,?,?) ' .
+         'ON DUPLICATE KEY UPDATE ' .
+         'account_name=?, expiration=?, bdlelgcntdwn=?, block_num=?, block_time=?');
+
+    $db->{'sth_del_upd_fio_name'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_NAME WHERE network = ? AND block_num <= ?');    
+
 
     
-    $db->{'sth_get_upd_userres'} = $dbh->prepare
-        ('SELECT account_name, block_num, block_time, cpu_weight, net_weight, ram_bytes, deleted ' .
-         'FROM UPD_USERRES WHERE network = ? AND block_num <= ? ORDER BY id');
-
-    $db->{'sth_erase_userres'} = $dbh->prepare
-        ('DELETE FROM USERRES WHERE network = ? AND account_name = ?');
+    $db->{'sth_fork_fio_tokenpubaddr'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_TOKENPUBADDR WHERE network = ? AND block_num >= ? ');
     
-    $db->{'sth_save_userres'} = $dbh->prepare
-        ('INSERT INTO USERRES ' .
-         '(network, account_name, block_num, block_time, cpu_weight, net_weight, ram_bytes) ' .
+    $db->{'sth_upd_fio_tokenpubaddr'} = $dbh->prepare
+        ('INSERT INTO UPD_FIO_TOKENPUBADDR ' . 
+         '(network, name_id, token_code, chain_code, public_address, ' .
+         'block_num, block_time) ' .
+         'VALUES(?,?,?,?,?,?,?)');
+
+    $db->{'sth_get_upd_fio_tokenpubaddr'} = $dbh->prepare
+        ('SELECT name_id, token_code, chain_code, public_address, ' .
+         'block_num, block_time ' .
+         'FROM UPD_FIO_TOKENPUBADDR WHERE network = ? AND block_num <= ? ORDER BY id');
+    
+    $db->{'sth_erase_fio_tokenpubaddr'} = $dbh->prepare
+        ('DELETE FROM FIO_TOKENPUBADDR WHERE ' .
+         'network=? and name_id=?');
+    
+    $db->{'sth_save_fio_tokenpubaddr'} = $dbh->prepare
+        ('INSERT INTO FIO_TOKENPUBADDR ' .
+         '(network, name_id, token_code, chain_code, public_address) ' .
+         'VALUES(?,?,?,?,?)');
+
+    $db->{'sth_del_upd_fio_tokenpubaddr'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_TOKENPUBADDR WHERE network = ? AND block_num <= ?');    
+
+    
+
+    $db->{'sth_fork_fio_domain'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_DOMAIN WHERE network = ? AND block_num >= ? ');
+    
+    $db->{'sth_upd_fio_domain'} = $dbh->prepare
+        ('INSERT INTO UPD_FIO_DOMAIN ' . 
+         '(network, domain_id, account_name, fio_domain, expiration, ' .
+         'block_num, block_time, deleted) ' .
+         'VALUES(?,?,?,?,?,?,?,?)');
+
+    $db->{'sth_get_upd_fio_domain'} = $dbh->prepare
+        ('SELECT domain_id, account_name, fio_domain, expiration, ' .
+         'block_num, block_time, deleted ' .
+         'FROM UPD_FIO_DOMAIN WHERE network = ? AND block_num <= ? ORDER BY id');
+    
+    $db->{'sth_erase_fio_domain'} = $dbh->prepare
+        ('DELETE FROM FIO_DOMAIN WHERE ' .
+         'network=? and id=?');
+    
+    $db->{'sth_save_fio_domain'} = $dbh->prepare
+        ('INSERT INTO FIO_DOMAIN ' .
+         '(network, id, account_name, fio_domain, expiration, ' .
+         'block_num, block_time) ' .
          'VALUES(?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, cpu_weight=?, net_weight=?, ram_bytes=?');
+         'ON DUPLICATE KEY UPDATE ' .
+         'account_name=?, expiration=?, block_num=?, block_time=?');
 
-    $db->{'sth_del_upd_userres'} = $dbh->prepare
-        ('DELETE FROM UPD_USERRES WHERE network = ? AND block_num <= ?');    
+    $db->{'sth_del_upd_fio_domain'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_DOMAIN WHERE network = ? AND block_num <= ?');    
 
 
 
-    $db->{'sth_get_upd_rexfund'} = $dbh->prepare
-        ('SELECT account_name, block_num, block_time, balance, deleted ' .
-         'FROM UPD_REXFUND WHERE network = ? AND block_num <= ? ORDER BY id');
-
-    $db->{'sth_erase_rexfund'} = $dbh->prepare
-        ('DELETE FROM REXFUND WHERE network = ? AND account_name = ?');
+    $db->{'sth_fork_fio_clientkey'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_CLIENTKEY WHERE network = ? AND block_num >= ? ');
     
-    $db->{'sth_save_rexfund'} = $dbh->prepare
-        ('INSERT INTO REXFUND ' .
-         '(network, account_name, block_num, block_time, balance) ' .
-         'VALUES(?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, balance=?');
+    $db->{'sth_upd_fio_clientkey'} = $dbh->prepare
+        ('INSERT INTO UPD_FIO_CLIENTKEY ' . 
+         '(network, account_name, clientkey, ' .
+         'block_num, block_time) ' .
+         'VALUES(?,?,?,?,?)');
 
-    $db->{'sth_del_upd_rexfund'} = $dbh->prepare
-        ('DELETE FROM UPD_REXFUND WHERE network = ? AND block_num <= ?');    
-
-
-
-    $db->{'sth_get_upd_rexbal'} = $dbh->prepare
-        ('SELECT account_name, block_num, block_time, vote_stake, rex_balance, matured_rex, ' .
-         'rex_maturities, deleted ' .
-         'FROM UPD_REXBAL WHERE network = ? AND block_num <= ? ORDER BY id');
-
-    $db->{'sth_erase_rexbal'} = $dbh->prepare
-        ('DELETE FROM REXBAL WHERE network = ? AND account_name = ?');
+    $db->{'sth_get_upd_fio_clientkey'} = $dbh->prepare
+        ('SELECT account_name, clientkey, ' .
+         'block_num, block_time ' .
+         'FROM UPD_FIO_CLIENTKEY WHERE network = ? AND block_num <= ? ORDER BY id');
     
-    $db->{'sth_save_rexbal'} = $dbh->prepare
-        ('INSERT INTO REXBAL ' .
-         '(network, account_name, block_num, block_time, vote_stake, rex_balance, matured_rex, ' .
-         'rex_maturities) ' .
-         'VALUES(?,?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, vote_stake=?, rex_balance=?, matured_rex=?, ' .
-         'rex_maturities=?');
+    $db->{'sth_save_fio_clientkey'} = $dbh->prepare
+        ('INSERT INTO FIO_CLIENTKEY ' .
+         '(network, account_name, clientkey, ' .
+         'block_num, block_time) ' .
+         'VALUES(?,?,?,?,?)');
 
-    $db->{'sth_del_upd_rexbal'} = $dbh->prepare
-        ('DELETE FROM UPD_REXBAL WHERE network = ? AND block_num <= ?');    
-
-
-
-    $db->{'sth_get_upd_rexpool'} = $dbh->prepare
-        ('SELECT block_num, block_time, total_lent, total_unlent, total_rent, total_lendable, ' .
-         'total_rex, namebid_proceeds, loan_num ' .
-         'FROM UPD_REXPOOL WHERE network = ? AND block_num <= ? ORDER BY id');
-
-    $db->{'sth_save_rexpool'} = $dbh->prepare
-        ('INSERT INTO REXPOOL ' .
-         '(network, block_num, block_time, total_lent, total_unlent, total_rent, total_lendable, ' .
-         'total_rex, namebid_proceeds, loan_num) ' .
-         'VALUES(?,?,?,?,?,?,?,?,?,?) ' .
-         'ON DUPLICATE KEY UPDATE block_num=?, block_time=?, total_lent=?, total_unlent=?, total_rent=?, total_lendable=?, ' .
-         'total_rex=?, namebid_proceeds=?, loan_num=?');
-
-    $db->{'sth_del_upd_rexpool'} = $dbh->prepare
-        ('DELETE FROM UPD_REXPOOL WHERE network = ? AND block_num <= ?');    
+    $db->{'sth_del_upd_fio_clientkey'} = $dbh->prepare
+        ('DELETE FROM UPD_FIO_CLIENTKEY WHERE network = ? AND block_num <= ?');    
 }
