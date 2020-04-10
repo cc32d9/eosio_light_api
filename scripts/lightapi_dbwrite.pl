@@ -183,7 +183,7 @@ sub process_data
                 my $block_time = $data->{'block_timestamp'};
                 $block_time =~ s/T/ /;
                 my $table = $kvo->{'table'};
-                my $added = ($data->{'added'} eq 'true')?0:1;
+                my $deleted = ($data->{'added'} eq 'true')?0:1;
                 $have_updates = $block_num;
                 
                 if( $table eq 'fionames' )
@@ -196,9 +196,9 @@ sub process_data
                         ($network, $id, $kvo->{'value'}{'owner_account'},
                          $kvo->{'value'}{'name'}, $kvo->{'value'}{'domain'},
                          $exp, $kvo->{'value'}{'bundleeligiblecountdown'},
-                         $block_num, $block_time, $added);
+                         $block_num, $block_time, $deleted);
 
-                    if( $added )
+                    if( not $deleted )
                     {
                         foreach my $addr (@{$kvo->{'value'}{'addresses'}})
                         {
@@ -216,7 +216,7 @@ sub process_data
                     $db->{'sth_upd_fio_domain'}->execute
                         ($network, $kvo->{'value'}{'id'}, $kvo->{'value'}{'account'},
                          $kvo->{'value'}{'name'}, $kvo->{'value'}{'is_public'}, $exp, 
-                         $block_num, $block_time, $added);
+                         $block_num, $block_time, $deleted);
                 }
                 elsif( $table eq 'accountmap' )
                 {
