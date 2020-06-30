@@ -48,7 +48,10 @@ die('no such network') unless scalar(@{$res});
 my $systoken = $res->[0][0];
 my $decimals = $res->[0][1];
 
-my %bal;
+my %accounts;
+my %liquidbal;
+my %stakebal;
+my %rextotal;
 
 my $sth = $dbh->prepare
     ('SELECT account_name, amount FROM CURRENCY_BAL WHERE network=? AND contract=\'eosio.token\' AND currency=?');
@@ -56,7 +59,9 @@ my $sth = $dbh->prepare
 $sth->execute($network, $systoken);
 while( my $r = $sth->fetchrow_arrayref() )
 {
-    $bal{$r->[0]} = $r->[1];
+    my $acc = $r->[0];
+    $liquidbal{$acc} = $r->[1];
+    $accounts{$acc} = 1;
 }
 
 
@@ -68,14 +73,17 @@ while( my $r = $sth->fetchrow_arrayref() )
 {
     my $acc = $r->[0];
     my $stake = $r->[1] / (10**$decimals);
-    if( exists($bal{$acc}) )
+
+    if( not defined($stakebal{$acc}) )
     {
-        $bal{$acc} += $stake;
+        $stakebal{$acc} = $stake;
     }
     else
     {
-        $bal{$acc} = $stake;
+        $stakebal{$acc} += $stake;
     }
+    
+    $accounts{$acc} = 1;
 }
 
 
@@ -100,17 +108,10 @@ if( scalar(@{$res}) )
     {
         my $acc = $r->[0];
         my $fund = $r->[1];
-
-        if( exists($bal{$acc}) )
-        {
-            $bal{$acc} += $fund;
-        }
-        else
-        {
-            $bal{$acc} = $fund;
-        }
+        
+        $rextotal{$acc} = $fund;
+        $accounts{$acc} = 1;
     }
-
     
     $sth = $dbh->prepare
         ('SELECT ' .
@@ -156,22 +157,37 @@ if( scalar(@{$res}) )
 
         my $rexbal = $maturing_rex->badd($matured_rex)->badd($savings_rex)->bmul($rexprice);
         
-        if( exists($bal{$acc}) )
+        if( exists($rextotal{$acc}) )
         {
-            $bal{$acc} += $rexbal;
+            $rextotal{$acc} += $rexbal;
         }
         else
         {
-            $bal{$acc} = $rexbal;
+            $rextotal{$acc} = $rexbal;
         }
+        $accounts{$acc} = 1;
     }
 }
 
 $dbh->disconnect();
 
-foreach my $acc (sort keys %bal)
+printf("Account\tTotal\tLiquid\tStake\tREX\n");
+
+my $numformat = '%.' . $decimals . 'f';
+my $printfformat = join("\t", '%s', $numformat, $numformat, $numformat, $numformat) . "\n";
+
+foreach my $acc (sort keys %accounts)
 {
-    printf('%s,%.'.$decimals . "f\n", $acc, $bal{$acc});
+    my $liq = $liquidbal{$acc};
+    $liq = 0 unless defined($liq);
+    
+    my $stake = $stakebal{$acc};
+    $stake = 0 unless defined($stake);
+    
+    my $rex = $rextotal{$acc};
+    $rex = 0 unless defined($rex);
+    
+    printf($printfformat, $acc, $liq+$stake+$rex, $liq, $stake, $rex)
 }
 
 
