@@ -54,6 +54,16 @@ my %stakebal;
 my %rextotal;
 
 my $sth = $dbh->prepare
+    ('SELECT account_name FROM AUTH_THRESHOLDS WHERE network=? AND perm=\'active\'');
+
+$sth->execute($network);
+while( my $r = $sth->fetchrow_arrayref() )
+{
+    $accounts{$r->[0]} = 1;
+}
+
+
+$sth = $dbh->prepare
     ('SELECT account_name, amount FROM CURRENCY_BAL WHERE network=? AND contract=\'eosio.token\' AND currency=?');
 
 $sth->execute($network, $systoken);
@@ -61,7 +71,6 @@ while( my $r = $sth->fetchrow_arrayref() )
 {
     my $acc = $r->[0];
     $liquidbal{$acc} = $r->[1];
-    $accounts{$acc} = 1;
 }
 
 
@@ -82,8 +91,6 @@ while( my $r = $sth->fetchrow_arrayref() )
     {
         $stakebal{$acc} += $stake;
     }
-    
-    $accounts{$acc} = 1;
 }
 
 
@@ -110,7 +117,6 @@ if( scalar(@{$res}) )
         my $fund = $r->[1];
         
         $rextotal{$acc} = $fund;
-        $accounts{$acc} = 1;
     }
     
     $sth = $dbh->prepare
@@ -165,7 +171,6 @@ if( scalar(@{$res}) )
         {
             $rextotal{$acc} = $rexbal;
         }
-        $accounts{$acc} = 1;
     }
 }
 
