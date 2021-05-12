@@ -19,18 +19,10 @@ my $dbh;
 
 my $sth_allnetworks;
 my $sth_getnet;
-my $sth_res;
-my $sth_res_upd;
 my $sth_bal;
 my $sth_bal_upd;
 my $sth_tokenbal;
 my $sth_tokenbal_upd;
-my $sth_rexpool;
-my $sth_rexpool_upd;
-my $sth_rexfund;
-my $sth_rexfund_upd;
-my $sth_rexbal;
-my $sth_rexbal_upd;
 my $sth_topholders;
 my $sth_holdercount;
 my $sth_perms;
@@ -40,17 +32,10 @@ my $sth_auth_upd;
 my $sth_acc_auth_upd;
 my $sth_linkauth;
 my $sth_linkauth_upd;
-my $sth_delegated_from;
-my $sth_delegated_from_upd;
-my $sth_delegated_to;
-my $sth_delegated_to_upd;
 my $sth_get_code;
 my $sth_get_code_upd;
 my $sth_searchkey;
 my $sth_acc_by_actor;
-my $sth_usercount;
-my $sth_topram;
-my $sth_topstake;
 my $sth_searchcode;
 my $sth_sync;
 my $sth_all_sync;
@@ -90,20 +75,6 @@ sub check_dbserver
              'block_num, block_time ' .
              'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network WHERE NETWORKS.network=?');
 
-        $sth_res = $dbh->prepare
-            ('SELECT ' .
-             'cpu_weight, net_weight, ' .
-             'ram_bytes ' .
-             'FROM USERRES ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_res_upd = $dbh->prepare
-            ('SELECT ' .
-             'cpu_weight, net_weight, ' .
-             'ram_bytes, deleted ' .
-             'FROM UPD_USERRES ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
         $sth_bal = $dbh->prepare
             ('SELECT contract, currency, ' .
              'CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
@@ -125,56 +96,6 @@ sub check_dbserver
             ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
              'FROM UPD_CURRENCY_BAL ' .
              'WHERE network=? AND account_name=? AND contract=? AND currency=? ORDER BY id');
-
-        $sth_rexpool = $dbh->prepare
-            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
-             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
-             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
-             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
-             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
-             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
-             'loan_num ' .
-             'FROM REXPOOL ' .
-             'WHERE network=?');
-
-        $sth_rexpool_upd = $dbh->prepare
-            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
-             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
-             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
-             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
-             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
-             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
-             'loan_num ' .
-             'FROM UPD_REXPOOL ' .
-             'WHERE network=? ORDER BY id');
-
-        $sth_rexfund = $dbh->prepare
-            ('SELECT ' .
-             'CAST(balance AS DECIMAL(48,24)) AS balance ' .
-             'FROM REXFUND ' .
-             'WHERE network=? AND account_name=?');
-        
-        $sth_rexfund_upd = $dbh->prepare
-            ('SELECT ' .
-             'CAST(balance AS DECIMAL(48,24)) AS balance, deleted ' .
-             'FROM UPD_REXFUND ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_rexbal = $dbh->prepare
-            ('SELECT ' .
-             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
-             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
-             'matured_rex, rex_maturities ' .
-             'FROM REXBAL ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_rexbal_upd = $dbh->prepare
-            ('SELECT ' .
-             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
-             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
-             'matured_rex, rex_maturities, deleted ' .
-             'FROM UPD_REXBAL ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
         
         $sth_topholders = $dbh->prepare
             ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
@@ -220,26 +141,6 @@ sub check_dbserver
              'FROM UPD_LINKAUTH ' .
              'WHERE network=? AND account_name=? ORDER BY id');
 
-        $sth_delegated_from = $dbh->prepare
-            ('SELECT del_from, cpu_weight, net_weight ' .
-             'FROM DELBAND ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_delegated_from_upd = $dbh->prepare
-            ('SELECT del_from, cpu_weight, net_weight, deleted ' .
-             'FROM UPD_DELBAND ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_delegated_to = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight ' .
-             'FROM DELBAND ' .
-             'WHERE network=? AND del_from=?');
-
-        $sth_delegated_to_upd = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight, deleted ' .
-             'FROM UPD_DELBAND ' .
-             'WHERE network=? AND del_from=? ORDER BY id');
-
         $sth_get_code = $dbh->prepare
             ('SELECT code_hash ' .
              'FROM CODEHASH ' .
@@ -259,17 +160,6 @@ sub check_dbserver
             ('SELECT account_name, perm ' .
              'FROM AUTH_ACC ' .
              'WHERE network=? AND actor=? AND permission=? LIMIT 100');
-
-        $sth_usercount = $dbh->prepare
-            ('SELECT count(*) as usercount FROM USERRES WHERE network=?');
-
-        $sth_topram = $dbh->prepare
-            ('SELECT account_name, ram_bytes FROM USERRES ' .
-             'WHERE network=? ORDER BY ram_bytes DESC LIMIT ?');
-
-        $sth_topstake = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight FROM USERRES ' .
-             'WHERE network=? ORDER BY weight_sum DESC LIMIT ?');
 
         $sth_searchcode = $dbh->prepare
             ('SELECT network, account_name, code_hash ' .
@@ -356,16 +246,6 @@ sub get_accinfo
     my $acc = shift;
 
     {
-        $sth_res->execute($network, $acc);
-        $result->{'resources'} = $sth_res->fetchrow_hashref();
-
-        $sth_res_upd->execute($network, $acc);
-        my $res_upd = $sth_res_upd->fetchall_arrayref({});
-        foreach my $row (@{$res_upd}) {
-            $result->{'resources'} = $row;
-        }
-    }
-    {
         $result->{'permissions'} = get_permissions($network, $acc);
 
         $sth_acc_auth_upd->execute($network, $acc);
@@ -412,44 +292,6 @@ sub get_accinfo
         }
     }
     {
-        $sth_delegated_from->execute($network, $acc);
-        my $delfrom = $sth_delegated_from->fetchall_hashref('del_from');
-        $sth_delegated_from_upd->execute($network, $acc);
-        my $del_from_upd = $sth_delegated_from_upd->fetchall_arrayref({});
-        foreach my $row (@{$del_from_upd}) {
-            if ( $row->{'deleted'} ) {
-                delete $delfrom->{$row->{'del_from'}};
-            } else {
-                delete $row->{'deleted'};
-                $delfrom->{$row->{'del_from'}} = $row;
-            }
-        }
-
-        $result->{'delegated_from'} = [];
-        foreach my $name (sort keys %{$delfrom}) {
-            push(@{$result->{'delegated_from'}}, $delfrom->{$name});
-        }
-    }
-    {
-        $sth_delegated_to->execute($network, $acc);
-        my $delto = $sth_delegated_to->fetchall_hashref('account_name');
-        $sth_delegated_to_upd->execute($network, $acc);
-        my $del_to_upd = $sth_delegated_to_upd->fetchall_arrayref({});
-        foreach my $row (@{$del_to_upd}) {
-            if ( $row->{'deleted'} ) {
-                delete $delto->{$row->{'account_name'}};
-            } else {
-                delete $row->{'deleted'};
-                $delto->{$row->{'account_name'}} = $row;
-            }
-        }
-
-        $result->{'delegated_to'} = [];
-        foreach my $name (sort keys %{$delto}) {
-            push(@{$result->{'delegated_to'}}, $delto->{$name});
-        }
-    }
-    {
         $sth_get_code->execute($network, $acc);
         my $r = $sth_get_code->fetchall_arrayref({});
         if ( scalar(@{$r}) > 0 ) {
@@ -471,156 +313,6 @@ sub get_accinfo
 
 
 
-sub retrieve_rexinfo
-{
-    my $network = shift;
-    my $acc = shift;
-
-    my $ret = {};
-    
-    my $rexpool;
-
-    {
-        $sth_rexpool->execute($network);
-        my $r = $sth_rexpool->fetchall_arrayref({});
-        if ( scalar(@{$r}) == 0 ) {
-            return;
-        }
-        $rexpool = $r->[0];
-        
-        $sth_rexpool_upd->execute($network);
-        my $upd = $sth_rexpool_upd->fetchall_arrayref({});
-        if( scalar(@{$upd}) > 0 ) {
-            $rexpool = pop @{$upd};
-        }
-    }
-
-    $ret->{'pool'} = $rexpool;
-    
-    my $rexfund = 0;
-    
-    {
-        $sth_rexfund->execute($network, $acc);
-        my $r = $sth_rexfund->fetchall_arrayref({});
-        if ( scalar(@{$r}) > 0 ) {
-            $rexfund = $r->[0]{'balance'};
-        }
-
-        $sth_rexfund_upd->execute($network, $acc);
-        my $upd = $sth_rexfund_upd->fetchall_arrayref({});
-        foreach my $row (@{$upd}) {
-            if ( $row->{'deleted'} ) {
-                $rexfund = 0;
-            } else {
-                $rexfund = $row->{'balance'};
-            }
-        }
-    }
-    
-    $ret->{'fund'} = $rexfund;
-
-    my $rexbal;
-    {
-        $sth_rexbal->execute($network, $acc);
-        my $r = $sth_rexbal->fetchall_arrayref({});
-        if ( scalar(@{$r}) > 0 ) {
-            $rexbal = $r->[0];
-        }
-
-        $sth_rexbal_upd->execute($network, $acc);
-        my $upd = $sth_rexbal_upd->fetchall_arrayref({});
-        foreach my $row (@{$upd}) {
-            if ( $row->{'deleted'} ) {
-                $rexbal = undef;
-            } else {
-                $rexbal = $row;
-            }
-        }
-    }
-
-    if( defined($rexbal) ) { 
-        $ret->{'bal'}= {
-                        'vote_stake' => $rexbal->{'vote_stake'},
-                        'rex_balance' => $rexbal->{'rex_balance'},
-                        'matured_rex' => $rexbal->{'matured_rex'},
-                       };
-        $ret->{'bal'}{'rex_maturities'} = $json->decode($rexbal->{'rex_maturities'});
-    }
-    
-    return $ret;
-}
-
-
-sub get_rexbalances
-{
-    my $result = shift;
-    my $network = shift;
-    my $acc = shift;
-    my $netinfo = shift;
-
-    if( not $netinfo->{'rex_enabled'} ) {
-        return;
-    }
-
-    my $decimals = $netinfo->{'decimals'};
-    my $systoken = $netinfo->{'systoken'};
-    
-    my $rex = retrieve_rexinfo($network, $acc);
-    
-    $result->{'rex'}{'fund'} = sprintf('%.'.$decimals . 'f %s', $rex->{'fund'}, $systoken);
-    
-    my $maturing_rex = Math::BigFloat->new(0);
-    my $matured_rex = Math::BigFloat->new(0);
-    my $savings_rex = Math::BigFloat->new(0);
-    my $vote_stake = 0;
-
-    my $end_of_time = DateTime->from_epoch('epoch' => 0xffffffff, 'time_zone' => 'UTC');
-
-    if( defined($rex->{'bal'}) ) {
-        my $rexbal = $rex->{'bal'};
-        $matured_rex += $rexbal->{'matured_rex'};
-        $vote_stake = $rexbal->{'vote_stake'};
-            
-        my $now = DateTime->now('time_zone' => 'UTC');
-        
-        foreach my $enry (@{$rex->{'bal'}{'rex_maturities'}}) {
-            my $key = $enry->{'key'};
-            my $val = $enry->{'value'};
-            if( not defined($key) ) {
-                $key = $enry->{'first'};
-                $val = $enry->{'second'};
-            }
-            next unless (defined($key) and defined($val));
-            
-            my $mt = DateTime::Format::ISO8601->parse_datetime($key);
-            $mt->set_time_zone('UTC');
-
-            if( DateTime->compare($mt, $now) <= 0 ) {
-                $matured_rex += $val;
-            }
-            else {
-                if( DateTime->compare($mt, $end_of_time) == 0 ) {
-                    $savings_rex += $val;
-                }
-                else {
-                    $maturing_rex += $val;
-                }
-            }
-        }
-    }
-
-    my $rexprice = Math::BigFloat->new
-        ($rex->{'pool'}{'total_lendable'})->bdiv($rex->{'pool'}->{'total_rex'})->bdiv(10000);
-    
-    $result->{'rex'}{'maturing'} = sprintf('%.'.$decimals . 'f %s',
-                                           $maturing_rex*$rexprice, $systoken);
-    
-    $result->{'rex'}{'matured'} = sprintf('%.'.$decimals . 'f %s',
-                                          $matured_rex*$rexprice, $systoken);
-
-    $result->{'rex'}{'savings'} = sprintf('%.'.$decimals . 'f %s',
-                                          $savings_rex*$rexprice, $systoken);
-}
 
 
 
@@ -838,7 +530,6 @@ $builder->mount
 
          get_accinfo($result, $network, $acc);
          get_balances($result, $network, $acc);
-         get_rexbalances($result, $network, $acc, $netinfo);
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
@@ -911,67 +602,6 @@ $builder->mount
 
 
 
-$builder->mount
-    ('/api/rexbalance' => sub {
-         my $env = shift;
-         my $req = Plack::Request->new($env);
-         my $path_info = $req->path_info;
-
-         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
-             return(error($req, 'Expected a network name and a valid EOS account name in URL path'));
-         }
-
-         my $network = $1;
-         my $acc = $2;
-         check_dbserver();
-
-         my $netinfo = get_network($network);
-         if ( not defined($netinfo) ) {
-             return(error($req, 'Unknown network name: ' . $network));
-         }
-
-         my $result = {'account_name' => $acc, 'chain' => $netinfo};
-         get_rexbalances($result, $network, $acc, $netinfo);
-
-         my $res = $req->new_response(200);
-         $res->content_type('application/json');
-         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
-         $res->body($j->encode($result));
-         $res->finalize;
-     });
-
-$builder->mount
-    ('/api/rexraw' => sub {
-         my $env = shift;
-         my $req = Plack::Request->new($env);
-         my $path_info = $req->path_info;
-
-         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})$/ ) {
-             return(error($req, 'Expected a network name and a valid EOS account name in URL path'));
-         }
-
-         my $network = $1;
-         my $acc = $2;
-         check_dbserver();
-
-         my $netinfo = get_network($network);
-         if ( not defined($netinfo) ) {
-             return(error($req, 'Unknown network name: ' . $network));
-         }
-
-         if( not $netinfo->{'rex_enabled'} ) {
-             return(error($req, 'REX is not enabled on ' . $network));
-         }
-
-         my $result = {'account_name' => $acc, 'chain' => $netinfo};
-         $result->{'rexraw'} = retrieve_rexinfo($network, $acc);
-
-         my $res = $req->new_response(200);
-         $res->content_type('application/json');
-         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
-         $res->body($j->encode($result));
-         $res->finalize;
-     });
 
 
 $builder->mount
@@ -1184,97 +814,10 @@ $builder->mount
      });
 
 
-$builder->mount
-    ('/api/usercount' => sub {
-         my $env = shift;
-         my $req = Plack::Request->new($env);
-         my $path_info = $req->path_info;
-
-         if ( $path_info !~ /^\/(\w+)$/ ) {
-             return(error($req, 'Expected a network name in URL path'));
-         }
-
-         my $network = $1;
-         check_dbserver();
-
-         $sth_usercount->execute($network);
-         my $r = $sth_usercount->fetchall_arrayref();
-
-         my $res = $req->new_response(200);
-         $res->content_type('text/plain');
-         $res->body($r->[0][0]);
-         $res->finalize;
-     });
 
 
-$builder->mount
-    ('/api/topram' => sub {
-         my $env = shift;
-         my $req = Plack::Request->new($env);
-         my $path_info = $req->path_info;
-
-         if ( $path_info !~ /^\/(\w+)\/(\d+)$/ ) {
-             return(error($req, 'Expected a network name and count in URL path'));
-         }
-
-         my $network = $1;
-         my $count = $2;
-
-         if( $count < 10 or $count > 1000 )
-         {
-             return(error($req, 'Invalid count: ' . $count));
-         }
-
-         check_dbserver();
-         $sth_topram->execute($network, $count);
-         my $all = $sth_topram->fetchall_arrayref({});
-         my $result = [];
-         foreach my $r (@{$all})
-         {
-             push(@{$result}, [$r->{'account_name'}, $r->{'ram_bytes'}]);
-         }
-
-         my $res = $req->new_response(200);
-         $res->content_type('application/json');
-         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
-         $res->body($j->encode($result));
-         $res->finalize;
-     });
 
 
-$builder->mount
-    ('/api/topstake' => sub {
-         my $env = shift;
-         my $req = Plack::Request->new($env);
-         my $path_info = $req->path_info;
-
-         if ( $path_info !~ /^\/(\w+)\/(\d+)$/ ) {
-             return(error($req, 'Expected a network name and count in URL path'));
-         }
-
-         my $network = $1;
-         my $count = $2;
-
-         if( $count < 10 or $count > 1000 )
-         {
-             return(error($req, 'Invalid count: ' . $count));
-         }
-
-         check_dbserver();
-         $sth_topstake->execute($network, $count);
-         my $all = $sth_topstake->fetchall_arrayref({});
-         my $result = [];
-         foreach my $r (@{$all})
-         {
-             push(@{$result}, [$r->{'account_name'}, $r->{'cpu_weight'}, $r->{'net_weight'} ]);
-         }
-
-         my $res = $req->new_response(200);
-         $res->content_type('application/json');
-         my $j = $req->query_parameters->{pretty} ? $jsonp:$json;
-         $res->body($j->encode($result));
-         $res->finalize;
-     });
 
 
 
