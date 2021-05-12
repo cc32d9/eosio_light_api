@@ -1,12 +1,12 @@
 [Unit]
-Description=lightapi API
+Description=FIO lightapi API
 
 [Service]
 Type=simple
-Environment="LIGHTAPI_HOME=/opt/eosio_light_api"
-Environment="LISTEN=0.0.0.0:5001"
-Environment="WORKERS=6"
-EnvironmentFile=-/etc/default/lightapi_api
+Environment="LIGHTAPI_HOME=/opt/fio_light_api"
+Environment="LISTEN=0.0.0.0:5201"
+Environment="WORKERS=3"
+EnvironmentFile=-/etc/default/fio_lightapi_api
 ExecStart=/usr/local/bin/starman --listen ${LISTEN} --workers ${WORKERS} ${LIGHTAPI_HOME}/api/lightapi.psgi
 TimeoutSec=45s
 Restart=always

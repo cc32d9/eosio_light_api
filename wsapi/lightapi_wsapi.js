@@ -9,9 +9,9 @@ nconf.argv();
 
 nconf.defaults({
     'dbhost':     'localhost',
-    'dnmame':     'lightapi',
-    'dbuser':     'lightapiro',
-    'dbpassword': 'lightapiro',
+    'dnmame':     'fio_lightapi',
+    'dbuser':     'fio_lightapiro',
+    'dbpassword': 'fio_lightapiro',
     'dbmaxconn':  20,
     'httpport':   5010,
     'httphost':   '127.0.0.1',

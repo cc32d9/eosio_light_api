@@ -6,12 +6,12 @@ if [ x"$PORTS" = x ]; then
 fi
 
 
-cp lightapi_wsapi@.service /etc/systemd/system/
+cp fio_lightapi_wsapi@.service /etc/systemd/system/
 systemctl daemon-reload
 
 for p in $PORTS; do
-    systemctl enable lightapi_wsapi@${p}
-    systemctl start lightapi_wsapi@${p}
+    systemctl enable fio_lightapi_wsapi@${p}
+    systemctl start fio_lightapi_wsapi@${p}
 done
 
 

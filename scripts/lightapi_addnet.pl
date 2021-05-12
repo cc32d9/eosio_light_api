@@ -12,9 +12,9 @@ my $systoken;
 my $decimals;
 my $testnet;
 
-my $dsn = 'DBI:MariaDB:database=lightapi;host=localhost';
-my $db_user = 'lightapi';
-my $db_password = 'ce1Shish';
+my $dsn = 'DBI:MariaDB:database=fio_lightapi;host=localhost';
+my $db_user = 'fio_lightapi';
+my $db_password = 'aigax7Ph';
 
 
 my $ok = GetOptions

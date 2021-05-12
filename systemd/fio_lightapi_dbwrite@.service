@@ -5,13 +5,13 @@
 
 
 [Unit]
-Description=lightapi DB Writer
+Description=lightapi FIO DB Writer
 After=mariadb.service
 
 [Service]
 Type=simple
-Environment="LIGHTAPI_HOME=/opt/eosio_light_api"
-EnvironmentFile=/etc/default/lightapi_%i
+Environment="LIGHTAPI_HOME=/opt/fio_light_api"
+EnvironmentFile=/etc/default/fio_lightapi_%i
 
 ExecStart=/usr/bin/perl ${LIGHTAPI_HOME}/scripts/lightapi_dbwrite.pl --network=%i $DBWRITE_OPTS
 TimeoutSec=45s

@@ -1,11 +1,11 @@
 [Unit]
-Description=lightapi Websocket API
+Description=FIO lightapi Websocket API
 
 [Service]
 Type=simple
-Environment="LIGHTAPI_HOME=/opt/eosio_light_api"
+Environment="LIGHTAPI_HOME=/opt/fio_light_api"
 Environment="HTTPHOST=0.0.0.0"
-EnvironmentFile=-/etc/default/lightapi_wsapi
+EnvironmentFile=-/etc/default/fio_lightapi_wsapi
 ExecStart=/usr/bin/node ${LIGHTAPI_HOME}/wsapi/lightapi_wsapi.js --httpport %i --httphost ${HTTPHOST}
 TimeoutSec=45s
 Restart=always

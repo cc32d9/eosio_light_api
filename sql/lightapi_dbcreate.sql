@@ -1,10 +1,10 @@
-CREATE DATABASE lightapi;
+CREATE DATABASE fio_lightapi;
 
-CREATE USER 'lightapi'@'localhost' IDENTIFIED BY 'ce1Shish';
-GRANT ALL ON lightapi.* TO 'lightapi'@'localhost';
-grant SELECT on lightapi.* to 'lightapiro'@'%' identified by 'lightapiro';
+CREATE USER 'fio_lightapi'@'localhost' IDENTIFIED BY 'aigax7Ph';
+GRANT ALL ON fio_lightapi.* TO 'fio_lightapi'@'localhost';
+grant SELECT on fio_lightapi.* to 'fio_lightapiro'@'%' identified by 'fio_lightapiro';
 
-use lightapi;
+use fio_lightapi;
 
 CREATE TABLE NETWORKS
 (

@@ -11,9 +11,9 @@ use Plack::Builder;
 use Plack::Request;
 
 # Need to make this configurable in an external file
-my $dsn = 'DBI:MariaDB:database=lightapi;host=localhost';
-my $db_user = 'lightapiro';
-my $db_password = 'lightapiro';
+my $dsn = 'DBI:MariaDB:database=fio_lightapi;host=localhost';
+my $db_user = 'fio_lightapiro';
+my $db_password = 'fio_lightapiro';
 
 my $dbh;
 

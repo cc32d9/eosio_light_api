@@ -1,4 +1,4 @@
-SVC="lightapi_api.service"
+SVC="fio_lightapi_api.service"
 
 for f in $SVC; do
     cp $f /etc/systemd/system/

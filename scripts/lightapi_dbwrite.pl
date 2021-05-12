@@ -18,9 +18,9 @@ my $ack_every = 10;
 
 my $network;
 
-my $dsn = 'DBI:MariaDB:database=lightapi;host=localhost';
-my $db_user = 'lightapi';
-my $db_password = 'ce1Shish';
+my $dsn = 'DBI:MariaDB:database=fio_lightapi;host=localhost';
+my $db_user = 'fio_lightapi';
+my $db_password = 'aigax7Ph';
 
 my $ok = GetOptions
     ('network=s' => \$network,
@@ -489,7 +489,7 @@ sub process_data
                 {
                     $db->{'sth_save_fio_domain'}->execute
                         ($network, map {$r->{$_}}
-                         qw(name_id account_name fio_domain is_public expiration block_num block_time
+                         qw(domain_id account_name fio_domain is_public expiration block_num block_time
                          account_name is_public expiration block_num block_time));
                 }
             }
