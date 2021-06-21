@@ -2,67 +2,67 @@
 
 The API is providing information about EOSIO blockchain accounts and
 token balances. It is deployed for several blockchains, such as EOS,
-Telos, BOS, WAX, and Europechain. Also an endpoint for Jungle testnet is
-available.
+Telos, BOS, WAX, and Europechain. Also an endpoints for a number of
+testnets are available.
 
 ## HTTP API
 
-In below examples, "eos" stands for the name of the network where API is
-taking the data.
+In below examples, "CHAIN" stands for the name of the network where API is
+taking the data (such as `eos`, `telos`, `wax` etc.).
 
 * `http://apihost.domain/api/networks` lists all known networks and
   their information.
 
 * Retrieve all token balances, resources and authorization information
- for an account: `http://apihost.domain/api/account/eos/ACCOUNT`
+ for an account: `http://apihost.domain/api/account/CHAIN/ACCOUNT`
 
 * Retrieve only token balances for an account:
-  `http://apihost.domain/api/balances/eos/ACCOUNT`
+  `http://apihost.domain/api/balances/CHAIN/ACCOUNT`
 
 * Retrieve all account information except token balances:
-  `http://apihost.domain/api/accinfo/eos/ACCOUNT`
+  `http://apihost.domain/api/accinfo/CHAIN/ACCOUNT`
 
 * Retrieve REX balances (fund, maturing, matured) for an account:
-  `http://apihost.domain/api/rexbalance/eos/ACCOUNT`
+  `http://apihost.domain/api/rexbalance/CHAIN/ACCOUNT`
 
 * Retrieve raw REX information for an account (to perform calculations
   on the client side):
-  `http://apihost.domain/api/rexraw/eos/ACCOUNT`
+  `http://apihost.domain/api/rexraw/CHAIN/ACCOUNT`
 
 * Retrieve all accounts in all known EOSIO networks dependent on a
  public key (only up to 100 accounts are returned), including accounts
  with recursive permissions: `http://apihost.domain/api/key/KEY`
 
-* `http://apihost.domain/api/tokenbalance/eos/ACCOUNT/CONTRACT/TOKEN`
+* `http://apihost.domain/api/tokenbalance/CHAIN/ACCOUNT/CONTRACT/TOKEN`
   returns a plain text with numeric output indicating the token
   balance. Zero is returned if the token is not present or does not
   exist.
 
-* `http://apihost.domain/api/topholders/eos/CONTRACT/TOKEN/NUM` returns
+* `http://apihost.domain/api/topholders/CHAIN/CONTRACT/TOKEN/NUM` returns
   top NUM holders of a specified token in a JSON array containing arrays
   of (account, amount) pairs. NUM must not be less than 10 or more than
   1000.
 
-* `http://apihost.domain/api/holdercount/eos/CONTRACT/TOKEN` returns the
+* `http://apihost.domain/api/holdercount/CHAIN/CONTRACT/TOKEN` returns the
   total count of token holders as plain text. The result is "0" if the
   token does not exist.
 
-* `http://apihost.domain/api/usercount/eos`
+* `http://apihost.domain/api/usercount/CHAIN`
   returns a plain text with total number of accounts in the network.
 
-* `http://apihost.domain/api/topram/eos/NUM` returns top NUM RAM buyers
+* `http://apihost.domain/api/topram/CHAIN/NUM` returns top NUM RAM buyers
   in a JSON array containing arrays of (account, bytes) pairs. NUM must
   not be less than 10 or more than 1000.
 
-* `http://apihost.domain/api/topstake/eos/NUM` returns top NUM stake
+* `http://apihost.domain/api/topstake/CHAIN/NUM` returns top NUM stake
   holders by sum of CPU and Net stakes, in a JSON array containing
   arrays of (account, cpu_weight, net_weight) tuples. NUM must not be
   less than 10 or more than 1000.
 
 * `http://apihost.domain/api/codehash/SHA256` retrieves all accounts in
-  all known EOS networks by contract hash.
+  all known networks by contract hash.
 
-* `http://apihost.domain/api/sync/eos` returns a plain text with delay
+* `http://apihost.domain/api/sync/CHAIN` returns a plain text with delay
   in seconds that this server's blockchain database is behind the real
   time, and a status: OK if the delay is within 180 seconds, or
   'OUT_OF_SYNC' otherwise.
@@ -149,12 +149,11 @@ User discussion and support in Telegram: https://t.me/lightapi
 
 ## Public endpoints
 
-A list of public API endpoints is served by IPFS, and available with the
-following links:
+[A list of public API endpoints](endpoints.json) is served by IPFS,
+and available with the following link:
 
 * https://endpoints.light.xeos.me/endpoints.json  (served by Cloudflare)
 
-* https://ipfs.io/ipns/QmTuBHRokSuiLBiqE1HySfK1BFiT2pmuDTuJKXNganE52N/endpoints.json
 
 
 ## Project sponsors
@@ -168,18 +167,21 @@ following links:
   additional features in Chronicle.
 
 * [EOS Amsterdam](https://eosamsterdam.net/) and
-  [Newdex](https://newdex.io/): development of Version 2.
+  [Newdex](https://newdex.io/): development of Version 2
 
-* [EOS Amsterdam](https://eosamsterdam.net/): hosting for BOS, WAX,
-  Europechain, Worbli and Instar blockchains.
-
-* [Worbli](https://worbli.io/) and [EOS
-  Amsterdam](https://eosamsterdam.net/): hosting and maintenance of
-  service in Singapore.
+* [EOS Amsterdam](https://eosamsterdam.net/): hosting for most public
+  blockchains.
   
 * [SOV](https://www.soveos.one/): new features.
 
+
+
 ## Installation
+
+The database writer process (`lightapi_dbwrite.pl`) is a consumer for
+[Chronicle](https://github.com/EOSChronicleProject) data feed, and it
+writes the blockchain information in real time into the local MariaDB
+database.
 
 ```
 sudo apt-get install git make cpanminus gcc g++ mariadb-server \
@@ -222,16 +224,46 @@ sh install_systemd_wsapi.sh 5101 5102 5103 5104 5105
 cat >/etc/cron.d/lightapi <<'EOT'
 */5 * * * * root perl /opt/eosio_light_api/scripts/lightapi_holdercounts.pl
 EOT
-
-
 ```
 
 
+## Public database access
+
+A replica of LightAPI databases is provided by EOS Amsterdam for
+public access. The goal is to allow queries which are not implemented
+by the API. There is no SLA, and the service is offered at best
+effort. You can query the SYNC table to see if the data is up to date.
+
+Access to the database is throttled on the network level for the sake
+of fair use.
+
+The database schema is available in
+[sql/lightapi_dbcreate.sql](sql/lightapi_dbcreate.sql).
+
+```
+# EOS and Telos data:
+mysql --host=pubdb.eu.eosamsterdam.net --port=3301 --user=lightapiro \
+  --password=lightapiro --database=lightapi
+
+# BOS, Instar, Proton, WAX, Europechain(XEC)
+mysql --host=pubdb.eu.eosamsterdam.net --port=3302 --user=lightapiro \
+  --password=lightapiro --database=lightapi
+```
+
+Query examples:
+
+```
+select * from CURRENCY_BAL where network='wax' and account_name = 'cc32dninexxx';
+
+select * from CURRENCY_BAL where network='wax' and contract='eosio.token' and currency='WAX' and amount > 500000;
+
+select count(*) from USERRES where network='wax' and account_name like '%.wam';
+```
 
 
 ## Copyright and License
 
-Copyright 2018-2019 cc32d9@gmail.com
+Copyright 2018-2021 cc32d9@gmail.com
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

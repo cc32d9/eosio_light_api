@@ -25,20 +25,6 @@
             "networks": ["kylin","protontest","telostest","waxtest"]
         }
     },
-    "state-track-endpoints": {
-        "https://strack.light.xeos.me": {
-            "country": ["NL","US"],
-            "continent": "ANY",
-            "admin":"cc32d9@eosamsterdam.net",
-            "networks": ["eos","telos","wax"]
-        },
-        "https://strack-dev.xeos.me": {
-            "country": ["NL"],
-            "continent": "EU",
-            "admin":"cc32d9@eosamsterdam.net",
-            "networks": ["jungle","kylin","protontest","telostest","waxtest"]
-        }
-    },
     "networks": {
         "bos": {
             "chainid": "d5a3d18fbb3c084e3b1f3fa98c21014b5f3db536cc15d08f9f6479517c6a3d86",
@@ -125,5 +111,5 @@
             "production": 1
         }
     },
-    "version": "2.0020"
+    "version": "2.0021"
 }
