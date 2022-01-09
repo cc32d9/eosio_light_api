@@ -67,7 +67,7 @@ rpc.methods.set('get_networks', async (socket, params) => {
                         resolve(ret);
                     })
                     .catch(err => {
-                        console.log(err); 
+                        console.log(err);
                         reject(err);
                     });
                 conn.release();
@@ -75,13 +75,13 @@ rpc.methods.set('get_networks', async (socket, params) => {
     });
 });
 
-                            
+
 rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
     return new Promise( (resolve, reject) => {
         // console.log('get_accounts_from_keys');
         if( params.reqid == undefined ) {
             reject(new Error('Missing argument: reqid'));
-        }    
+        }
         else if( params.network == undefined ) {
             reject(new Error('Missing argument: network'));
         }
@@ -101,7 +101,7 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
                         try {
                             let netcnt = await conn.query(
                                 'SELECT count(*) as cnt FROM NETWORKS where network=?', [params.network]);
-                            
+
                             if( netcnt[0].cnt == 0 ) {
                                 reject(new Error('Invalid network: ' + params.network));
                             }
@@ -110,7 +110,7 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
 
                                 let status = 200;
                                 let errstring = null;
-                                
+
                                 try {
                                     for(let i=0; i<params.keys.length; i++) {
                                         let key = params.keys[i];
@@ -118,10 +118,10 @@ rpc.methods.set('get_accounts_from_keys', async (socket, params) => {
                                             let k = Numeric.stringToPublicKey(key);
                                             key = Numeric.publicKeyToString(k);
                                         }
-                                        
+
                                         await new Promise( (resolve, reject) => {
-                                            conn.queryStream('SELECT account_name, perm, weight FROM AUTH_KEYS ' +
-                                                             'WHERE network=? AND pubkey=?', [params.network, key])
+                                            conn.queryStream('SELECT account_name, perm, weight FROM ' + params.network + '_AUTH_KEYS ' +
+                                                             'WHERE pubkey=?', [key])
                                                 .on("error", err => {
                                                     console.error(err);
                                                     reject();
@@ -170,7 +170,7 @@ rpc.methods.set('get_balances', async (socket, params) => {
         // console.log('get_balances');
         if( params.reqid == undefined ) {
             reject(new Error('Missing argument: reqid'));
-        }    
+        }
         else if( params.network == undefined ) {
             reject(new Error('Missing argument: network'));
         }
@@ -190,7 +190,7 @@ rpc.methods.set('get_balances', async (socket, params) => {
                         try {
                             let netcnt = await conn.query(
                                 'SELECT count(*) as cnt FROM NETWORKS where network=?', [params.network]);
-                            
+
                             if( netcnt[0].cnt == 0 ) {
                                 reject(new Error('Invalid network: ' + params.network));
                             }
@@ -205,8 +205,8 @@ rpc.methods.set('get_balances', async (socket, params) => {
                                         let acc = params.accounts[i];
                                         let balances = await conn.query
                                         ('SELECT contract, currency, CAST(amount AS CHAR ASCII) AS amount, decimals ' +
-                                         'FROM CURRENCY_BAL WHERE network=? AND account_name=?',
-                                         [params.network, acc]);
+                                         'FROM ' + params.network + '_CURRENCY_BAL WHERE account_name=?',
+                                         [acc]);
 
                                         let ret_balances = new Array();
                                         for(let j=0; j<balances.length; j++) {
@@ -215,7 +215,7 @@ rpc.methods.set('get_balances', async (socket, params) => {
                                                                currency: b.currency,
                                                                amount: apply_decimals(b.amount, b.decimals)});
                                         }
-                                        
+
                                         socket.notify('reqdata', {
                                             'method': 'get_balances',
                                             'reqid': params.reqid,
@@ -227,7 +227,7 @@ rpc.methods.set('get_balances', async (socket, params) => {
                                     status = 500;
                                     errstring = err;
                                 }
-                                
+
                                 socket.notify('reqdata', {
                                     'method': 'get_balances',
                                     'reqid': params.reqid,
@@ -253,7 +253,7 @@ rpc.methods.set('get_token_holders', async (socket, params) => {
         // console.log('get_token_holders');
         if( params.reqid == undefined ) {
             reject(new Error('Missing argument: reqid'));
-        }    
+        }
         else if( params.network == undefined ) {
             reject(new Error('Missing argument: network'));
         }
@@ -270,7 +270,7 @@ rpc.methods.set('get_token_holders', async (socket, params) => {
                         try {
                             let netcnt = await conn.query(
                                 'SELECT count(*) as cnt FROM NETWORKS where network=?', [params.network]);
-                            
+
                             if( netcnt[0].cnt == 0 ) {
                                 reject(new Error('Invalid network: ' + params.network));
                             }
@@ -284,8 +284,8 @@ rpc.methods.set('get_token_holders', async (socket, params) => {
                                     await new Promise( (resolve, reject) => {
                                         conn.queryStream('SELECT account_name AS acc, ' +
                                                          'CAST(amount AS CHAR ASCII) AS amount, decimals ' +
-                                                         'FROM CURRENCY_BAL WHERE network=? AND contract=? AND currency=?',
-                                                         [params.network, params.contract, params.currency])
+                                                         'FROM ' + params.network + '_CURRENCY_BAL WHERE contract=? AND currency=?',
+                                                         [params.contract, params.currency])
                                             .on("error", err => {
                                                 console.error(err);
                                                 reject();
@@ -300,14 +300,14 @@ rpc.methods.set('get_token_holders', async (socket, params) => {
                                                 resolve();
                                             });
                                     });
-                                    
+
                                 }
                                 catch(err) {
                                     console.error(err);
                                     status = 500;
                                     errstring = err;
                                 }
-                                
+
                                 socket.notify('reqdata', {
                                     'method': 'get_token_holders',
                                     'reqid': params.reqid,
@@ -334,7 +334,7 @@ function apply_decimals(amt, decimals) {
     if( decimals == 0 ) {
         return amt;
     }
-    
+
     let pos = amt.indexOf('.');
     if( pos < 0 ) {
         amt = amt.concat('.');
@@ -344,11 +344,3 @@ function apply_decimals(amt, decimals) {
     }
     return amt.concat('0'.repeat(decimals));
 }
-
-
-
-
-
-
-
-

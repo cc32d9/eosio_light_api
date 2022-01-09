@@ -17,41 +17,7 @@ my $db_password = 'lightapiro';
 
 my $dbh;
 
-my $sth_allnetworks;
 my $sth_getnet;
-my $sth_res;
-my $sth_res_upd;
-my $sth_bal;
-my $sth_bal_upd;
-my $sth_tokenbal;
-my $sth_tokenbal_upd;
-my $sth_rexpool;
-my $sth_rexpool_upd;
-my $sth_rexfund;
-my $sth_rexfund_upd;
-my $sth_rexbal;
-my $sth_rexbal_upd;
-my $sth_topholders;
-my $sth_holdercount;
-my $sth_perms;
-my $sth_keys;
-my $sth_authacc;
-my $sth_auth_upd;
-my $sth_acc_auth_upd;
-my $sth_linkauth;
-my $sth_linkauth_upd;
-my $sth_delegated_from;
-my $sth_delegated_from_upd;
-my $sth_delegated_to;
-my $sth_delegated_to_upd;
-my $sth_get_code;
-my $sth_get_code_upd;
-my $sth_searchkey;
-my $sth_acc_by_actor;
-my $sth_usercount;
-my $sth_topram;
-my $sth_topstake;
-my $sth_searchcode;
 my $sth_sync;
 my $sth_all_sync;
 
@@ -78,203 +44,11 @@ sub check_dbserver
                              'mariadb_server_prepare' => 1});
         die($DBI::errstr) unless $dbh;
 
-        $sth_allnetworks = $dbh->prepare
-            ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' .
-             'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync, ' .
-             'block_num, block_time ' .
-             'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network');
-
         $sth_getnet = $dbh->prepare
             ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, rex_enabled, ' .
              'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync, ' .
              'block_num, block_time ' .
              'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network WHERE NETWORKS.network=?');
-
-        $sth_res = $dbh->prepare
-            ('SELECT ' .
-             'cpu_weight, net_weight, ' .
-             'ram_bytes ' .
-             'FROM USERRES ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_res_upd = $dbh->prepare
-            ('SELECT ' .
-             'cpu_weight, net_weight, ' .
-             'ram_bytes, deleted ' .
-             'FROM UPD_USERRES ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_bal = $dbh->prepare
-            ('SELECT contract, currency, ' .
-             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
-             'FROM CURRENCY_BAL ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_bal_upd = $dbh->prepare
-            ('SELECT contract, currency, ' .
-             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
-             'FROM UPD_CURRENCY_BAL ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_tokenbal = $dbh->prepare
-            ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
-             'FROM CURRENCY_BAL ' .
-             'WHERE network=? AND account_name=? AND contract=? AND currency=?');
-
-        $sth_tokenbal_upd = $dbh->prepare
-            ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
-             'FROM UPD_CURRENCY_BAL ' .
-             'WHERE network=? AND account_name=? AND contract=? AND currency=? ORDER BY id');
-
-        $sth_rexpool = $dbh->prepare
-            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
-             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
-             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
-             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
-             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
-             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
-             'loan_num ' .
-             'FROM REXPOOL ' .
-             'WHERE network=?');
-
-        $sth_rexpool_upd = $dbh->prepare
-            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
-             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
-             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
-             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
-             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
-             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
-             'loan_num ' .
-             'FROM UPD_REXPOOL ' .
-             'WHERE network=? ORDER BY id');
-
-        $sth_rexfund = $dbh->prepare
-            ('SELECT ' .
-             'CAST(balance AS DECIMAL(48,24)) AS balance ' .
-             'FROM REXFUND ' .
-             'WHERE network=? AND account_name=?');
-        
-        $sth_rexfund_upd = $dbh->prepare
-            ('SELECT ' .
-             'CAST(balance AS DECIMAL(48,24)) AS balance, deleted ' .
-             'FROM UPD_REXFUND ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_rexbal = $dbh->prepare
-            ('SELECT ' .
-             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
-             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
-             'matured_rex, rex_maturities ' .
-             'FROM REXBAL ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_rexbal_upd = $dbh->prepare
-            ('SELECT ' .
-             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
-             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
-             'matured_rex, rex_maturities, deleted ' .
-             'FROM UPD_REXBAL ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-        
-        $sth_topholders = $dbh->prepare
-            ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
-             'FROM CURRENCY_BAL ' .
-             'WHERE network=? AND contract=? AND currency=? ' .
-             'ORDER BY amount DESC LIMIT ?');
-
-        $sth_holdercount = $dbh->prepare
-            ('SELECT holders ' .
-             'FROM HOLDERCOUNTS ' .
-             'WHERE network=? AND contract=? AND currency=?');
-
-        $sth_perms = $dbh->prepare
-            ('SELECT perm, threshold ' .
-             'FROM AUTH_THRESHOLDS ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_keys = $dbh->prepare
-            ('SELECT pubkey, weight ' .
-             'FROM AUTH_KEYS ' .
-             'WHERE network=? AND account_name=? AND perm=?');
-
-        $sth_authacc = $dbh->prepare
-            ('SELECT actor, permission, weight ' .
-             'FROM AUTH_ACC ' .
-             'WHERE network=? AND account_name=? AND perm=?');
-
-        $sth_auth_upd = $dbh->prepare
-            ('SELECT network, account_name, perm, jsdata, deleted ' .
-             'FROM UPD_AUTH ORDER BY id');
-
-        $sth_acc_auth_upd = $dbh->prepare
-            ('SELECT perm, jsdata, deleted ' .
-             'FROM UPD_AUTH WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_linkauth = $dbh->prepare
-            ('SELECT code, type, requirement ' .
-             'FROM LINKAUTH ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_linkauth_upd = $dbh->prepare
-            ('SELECT code, type, requirement, deleted ' .
-             'FROM UPD_LINKAUTH ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_delegated_from = $dbh->prepare
-            ('SELECT del_from, cpu_weight, net_weight ' .
-             'FROM DELBAND ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_delegated_from_upd = $dbh->prepare
-            ('SELECT del_from, cpu_weight, net_weight, deleted ' .
-             'FROM UPD_DELBAND ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_delegated_to = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight ' .
-             'FROM DELBAND ' .
-             'WHERE network=? AND del_from=?');
-
-        $sth_delegated_to_upd = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight, deleted ' .
-             'FROM UPD_DELBAND ' .
-             'WHERE network=? AND del_from=? ORDER BY id');
-
-        $sth_get_code = $dbh->prepare
-            ('SELECT code_hash ' .
-             'FROM CODEHASH ' .
-             'WHERE network=? AND account_name=?');
-
-        $sth_get_code_upd = $dbh->prepare
-            ('SELECT code_hash, deleted ' .
-             'FROM UPD_CODEHASH ' .
-             'WHERE network=? AND account_name=? ORDER BY id');
-
-        $sth_searchkey = $dbh->prepare
-            ('SELECT network, account_name, perm, pubkey, weight ' .
-             'FROM AUTH_KEYS ' .
-             'WHERE pubkey=? LIMIT 100');        
-
-        $sth_acc_by_actor = $dbh->prepare
-            ('SELECT account_name, perm ' .
-             'FROM AUTH_ACC ' .
-             'WHERE network=? AND actor=? AND permission=? LIMIT 100');
-
-        $sth_usercount = $dbh->prepare
-            ('SELECT count(*) as usercount FROM USERRES WHERE network=?');
-
-        $sth_topram = $dbh->prepare
-            ('SELECT account_name, ram_bytes FROM USERRES ' .
-             'WHERE network=? ORDER BY ram_bytes DESC LIMIT ?');
-
-        $sth_topstake = $dbh->prepare
-            ('SELECT account_name, cpu_weight, net_weight FROM USERRES ' .
-             'WHERE network=? ORDER BY weight_sum DESC LIMIT ?');
-
-        $sth_searchcode = $dbh->prepare
-            ('SELECT network, account_name, code_hash ' .
-             'FROM CODEHASH ' .
-             'WHERE code_hash=?');
 
         $sth_sync = $dbh->prepare
             ('SELECT TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) ' .
@@ -288,11 +62,6 @@ sub check_dbserver
 }
 
 
-sub get_allnetworks
-{
-    $sth_allnetworks->execute();
-    return $sth_allnetworks->fetchall_arrayref({});
-}
 
 
 sub get_network
@@ -310,7 +79,12 @@ sub get_balances
     my $network = shift;
     my $acc = shift;
 
-    $sth_bal->execute($network, $acc);
+    my $sth_bal = $dbh->prepare
+            ('SELECT contract, currency, ' .
+             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
+             'FROM ' . $network . '_CURRENCY_BAL ' .
+             'WHERE account_name=?');
+    $sth_bal->execute($acc);
     my $balarray = $sth_bal->fetchall_arrayref({});
     my $balhash = {};
     foreach my $row (@{$balarray})
@@ -319,7 +93,12 @@ sub get_balances
         $balhash->{$row->{'contract'}}{$row->{'currency'}} = $row;
     }
 
-    $sth_bal_upd->execute($network, $acc);
+    my $sth_bal_upd = $dbh->prepare
+            ('SELECT contract, currency, ' .
+             'CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
+             'FROM ' . $network . '_UPD_CURRENCY_BAL ' .
+             'WHERE account_name=? ORDER BY id');
+    $sth_bal_upd->execute($acc);
     my $bal_upd = $sth_bal_upd->fetchall_arrayref({});
     foreach my $row (@{$bal_upd})
     {
@@ -356,10 +135,22 @@ sub get_accinfo
     my $acc = shift;
 
     {
-        $sth_res->execute($network, $acc);
+        my $sth_res = $dbh->prepare
+            ('SELECT ' .
+             'cpu_weight, net_weight, ' .
+             'ram_bytes ' .
+             'FROM ' . $network . '_USERRES ' .
+             'WHERE account_name=?');
+        $sth_res->execute($acc);
         $result->{'resources'} = $sth_res->fetchrow_hashref();
 
-        $sth_res_upd->execute($network, $acc);
+        my $sth_res_upd = $dbh->prepare
+            ('SELECT ' .
+             'cpu_weight, net_weight, ' .
+             'ram_bytes, deleted ' .
+             'FROM ' . $network . '_UPD_USERRES ' .
+             'WHERE account_name=? ORDER BY id');
+        $sth_res_upd->execute($acc);
         my $res_upd = $sth_res_upd->fetchall_arrayref({});
         foreach my $row (@{$res_upd}) {
             $result->{'resources'} = $row;
@@ -368,7 +159,10 @@ sub get_accinfo
     {
         $result->{'permissions'} = get_permissions($network, $acc);
 
-        $sth_acc_auth_upd->execute($network, $acc);
+        my $sth_acc_auth_upd = $dbh->prepare
+            ('SELECT perm, jsdata, deleted ' .
+             'FROM ' . $network . '_UPD_AUTH WHERE account_name=? ORDER BY id');
+        $sth_acc_auth_upd->execute($acc);
         my $auth_upd = $sth_acc_auth_upd->fetchall_arrayref({});
         foreach my $row (@{$auth_upd}) {
             my $newperms = [];
@@ -386,14 +180,22 @@ sub get_accinfo
         }
     }
     {
-        $sth_linkauth->execute($network, $acc);
+        my $sth_linkauth = $dbh->prepare
+            ('SELECT code, type, requirement ' .
+             'FROM ' . $network . '_LINKAUTH ' .
+             'WHERE account_name=?');
+        $sth_linkauth->execute($acc);
         my $linkauth_rows = $sth_linkauth->fetchall_arrayref({});
         my %linkauth;
         foreach my $row (@{$linkauth_rows}) {
             $linkauth{$row->{'code'}}{$row->{'type'}} = $row;
         }
 
-        $sth_linkauth_upd->execute($network, $acc);
+        my $sth_linkauth_upd = $dbh->prepare
+            ('SELECT code, type, requirement, deleted ' .
+             'FROM ' . $network . '_UPD_LINKAUTH ' .
+             'WHERE account_name=? ORDER BY id');
+        $sth_linkauth_upd->execute($acc);
         my $linkauth_upd = $sth_linkauth_upd->fetchall_arrayref({});
         foreach my $row (@{$linkauth_upd}) {
             if ( $row->{'deleted'} ) {
@@ -412,9 +214,19 @@ sub get_accinfo
         }
     }
     {
-        $sth_delegated_from->execute($network, $acc);
+        my $sth_delegated_from = $dbh->prepare
+            ('SELECT del_from, cpu_weight, net_weight ' .
+             'FROM ' . $network . '_DELBAND ' .
+             'WHERE account_name=?');
+
+        $sth_delegated_from->execute($acc);
         my $delfrom = $sth_delegated_from->fetchall_hashref('del_from');
-        $sth_delegated_from_upd->execute($network, $acc);
+
+        my $sth_delegated_from_upd = $dbh->prepare
+            ('SELECT del_from, cpu_weight, net_weight, deleted ' .
+             'FROM ' . $network . '_UPD_DELBAND ' .
+             'WHERE account_name=? ORDER BY id');
+        $sth_delegated_from_upd->execute($acc);
         my $del_from_upd = $sth_delegated_from_upd->fetchall_arrayref({});
         foreach my $row (@{$del_from_upd}) {
             if ( $row->{'deleted'} ) {
@@ -431,9 +243,18 @@ sub get_accinfo
         }
     }
     {
-        $sth_delegated_to->execute($network, $acc);
+        my $sth_delegated_to = $dbh->prepare
+            ('SELECT account_name, cpu_weight, net_weight ' .
+             'FROM ' . $network . '_DELBAND ' .
+             'WHERE del_from=?');
+        $sth_delegated_to->execute($acc);
         my $delto = $sth_delegated_to->fetchall_hashref('account_name');
-        $sth_delegated_to_upd->execute($network, $acc);
+
+        my $sth_delegated_to_upd = $dbh->prepare
+            ('SELECT account_name, cpu_weight, net_weight, deleted ' .
+             'FROM ' . $network . '_UPD_DELBAND ' .
+             'WHERE del_from=? ORDER BY id');
+        $sth_delegated_to_upd->execute($acc);
         my $del_to_upd = $sth_delegated_to_upd->fetchall_arrayref({});
         foreach my $row (@{$del_to_upd}) {
             if ( $row->{'deleted'} ) {
@@ -450,13 +271,21 @@ sub get_accinfo
         }
     }
     {
-        $sth_get_code->execute($network, $acc);
+        my $sth_get_code = $dbh->prepare
+            ('SELECT code_hash ' .
+             'FROM ' . $network . '_CODEHASH ' .
+             'WHERE account_name=?');
+        $sth_get_code->execute($acc);
         my $r = $sth_get_code->fetchall_arrayref({});
         if ( scalar(@{$r}) > 0 ) {
             $result->{'code'} = $r->[0];
         }
 
-        $sth_get_code_upd->execute($network, $acc);
+        my $sth_get_code_upd = $dbh->prepare
+            ('SELECT code_hash, deleted ' .
+             'FROM ' . $network . '_UPD_CODEHASH ' .
+             'WHERE account_name=? ORDER BY id');
+        $sth_get_code_upd->execute($acc);
         my $code_upd = $sth_get_code_upd->fetchall_arrayref({});
         foreach my $row (@{$code_upd}) {
             if ( $row->{'deleted'} ) {
@@ -477,18 +306,37 @@ sub retrieve_rexinfo
     my $acc = shift;
 
     my $ret = {};
-    
+
     my $rexpool;
 
     {
-        $sth_rexpool->execute($network);
+        my $sth_rexpool = $dbh->prepare
+            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
+             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
+             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
+             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
+             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
+             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
+             'loan_num ' .
+             'FROM ' . $network . '_REXPOOL');
+        $sth_rexpool->execute();
         my $r = $sth_rexpool->fetchall_arrayref({});
         if ( scalar(@{$r}) == 0 ) {
             return;
         }
         $rexpool = $r->[0];
-        
-        $sth_rexpool_upd->execute($network);
+
+        my $sth_rexpool_upd = $dbh->prepare
+            ('SELECT CAST(total_lent AS DECIMAL(48,24)) AS total_lent, ' .
+             'CAST(total_unlent AS DECIMAL(48,24)) AS total_unlent, ' .
+             'CAST(total_rent AS DECIMAL(48,24)) AS total_rent, ' .
+             'CAST(total_lendable AS DECIMAL(48,24)) AS total_lendable, ' .
+             'CAST(total_rex AS DECIMAL(48,24)) AS total_rex, ' .
+             'CAST(namebid_proceeds AS DECIMAL(48,24)) AS namebid_proceeds, ' .
+             'loan_num ' .
+             'FROM ' . $network . '_UPD_REXPOOL ' .
+             'ORDER BY id');
+        $sth_rexpool_upd->execute();
         my $upd = $sth_rexpool_upd->fetchall_arrayref({});
         if( scalar(@{$upd}) > 0 ) {
             $rexpool = pop @{$upd};
@@ -496,17 +344,27 @@ sub retrieve_rexinfo
     }
 
     $ret->{'pool'} = $rexpool;
-    
+
     my $rexfund = 0;
-    
+
     {
-        $sth_rexfund->execute($network, $acc);
+        my $sth_rexfund = $dbh->prepare
+            ('SELECT ' .
+             'CAST(balance AS DECIMAL(48,24)) AS balance ' .
+             'FROM ' . $network . '_REXFUND ' .
+             'WHERE account_name=?');
+        $sth_rexfund->execute($acc);
         my $r = $sth_rexfund->fetchall_arrayref({});
         if ( scalar(@{$r}) > 0 ) {
             $rexfund = $r->[0]{'balance'};
         }
 
-        $sth_rexfund_upd->execute($network, $acc);
+        my $sth_rexfund_upd = $dbh->prepare
+            ('SELECT ' .
+             'CAST(balance AS DECIMAL(48,24)) AS balance, deleted ' .
+             'FROM ' . $network . '_UPD_REXFUND ' .
+             'WHERE account_name=? ORDER BY id');
+        $sth_rexfund_upd->execute($acc);
         my $upd = $sth_rexfund_upd->fetchall_arrayref({});
         foreach my $row (@{$upd}) {
             if ( $row->{'deleted'} ) {
@@ -516,18 +374,32 @@ sub retrieve_rexinfo
             }
         }
     }
-    
+
     $ret->{'fund'} = $rexfund;
 
     my $rexbal;
     {
-        $sth_rexbal->execute($network, $acc);
+        my $sth_rexbal = $dbh->prepare
+            ('SELECT ' .
+             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
+             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
+             'matured_rex, rex_maturities ' .
+             'FROM ' . $network . '_REXBAL ' .
+             'WHERE account_name=?');
+        $sth_rexbal->execute($acc);
         my $r = $sth_rexbal->fetchall_arrayref({});
         if ( scalar(@{$r}) > 0 ) {
             $rexbal = $r->[0];
         }
 
-        $sth_rexbal_upd->execute($network, $acc);
+        my $sth_rexbal_upd = $dbh->prepare
+            ('SELECT ' .
+             'CAST(vote_stake AS DECIMAL(48,24)) AS vote_stake, ' .
+             'CAST(rex_balance AS DECIMAL(48,24)) AS rex_balance, ' .
+             'matured_rex, rex_maturities, deleted ' .
+             'FROM ' . $network . '_UPD_REXBAL ' .
+             'WHERE account_name=? ORDER BY id');
+        $sth_rexbal_upd->execute($acc);
         my $upd = $sth_rexbal_upd->fetchall_arrayref({});
         foreach my $row (@{$upd}) {
             if ( $row->{'deleted'} ) {
@@ -538,7 +410,7 @@ sub retrieve_rexinfo
         }
     }
 
-    if( defined($rexbal) ) { 
+    if( defined($rexbal) ) {
         $ret->{'bal'}= {
                         'vote_stake' => $rexbal->{'vote_stake'},
                         'rex_balance' => $rexbal->{'rex_balance'},
@@ -546,7 +418,7 @@ sub retrieve_rexinfo
                        };
         $ret->{'bal'}{'rex_maturities'} = $json->decode($rexbal->{'rex_maturities'});
     }
-    
+
     return $ret;
 }
 
@@ -564,11 +436,11 @@ sub get_rexbalances
 
     my $decimals = $netinfo->{'decimals'};
     my $systoken = $netinfo->{'systoken'};
-    
+
     my $rex = retrieve_rexinfo($network, $acc);
-    
+
     $result->{'rex'}{'fund'} = sprintf('%.'.$decimals . 'f %s', $rex->{'fund'}, $systoken);
-    
+
     my $maturing_rex = Math::BigFloat->new(0);
     my $matured_rex = Math::BigFloat->new(0);
     my $savings_rex = Math::BigFloat->new(0);
@@ -580,9 +452,9 @@ sub get_rexbalances
         my $rexbal = $rex->{'bal'};
         $matured_rex += $rexbal->{'matured_rex'};
         $vote_stake = $rexbal->{'vote_stake'};
-            
+
         my $now = DateTime->now('time_zone' => 'UTC');
-        
+
         foreach my $enry (@{$rex->{'bal'}{'rex_maturities'}}) {
             my $key = $enry->{'key'};
             my $val = $enry->{'value'};
@@ -591,7 +463,7 @@ sub get_rexbalances
                 $val = $enry->{'second'};
             }
             next unless (defined($key) and defined($val));
-            
+
             my $mt = DateTime::Format::ISO8601->parse_datetime($key);
             $mt->set_time_zone('UTC');
 
@@ -611,10 +483,10 @@ sub get_rexbalances
 
     my $rexprice = Math::BigFloat->new
         ($rex->{'pool'}{'total_lendable'})->bdiv($rex->{'pool'}->{'total_rex'})->bdiv(10000);
-    
+
     $result->{'rex'}{'maturing'} = sprintf('%.'.$decimals . 'f %s',
                                            $maturing_rex*$rexprice, $systoken);
-    
+
     $result->{'rex'}{'matured'} = sprintf('%.'.$decimals . 'f %s',
                                           $matured_rex*$rexprice, $systoken);
 
@@ -718,10 +590,25 @@ sub get_permissions
     my $network = shift;
     my $acc = shift;
 
-    $sth_perms->execute($network, $acc);
+    my $sth_perms = $dbh->prepare
+        ('SELECT perm, threshold ' .
+         'FROM ' . $network . '_AUTH_THRESHOLDS ' .
+         'WHERE account_name=?');
+
+    my $sth_keys = $dbh->prepare
+        ('SELECT pubkey, weight ' .
+         'FROM ' . $network . '_AUTH_KEYS ' .
+         'WHERE account_name=? AND perm=?');
+
+    my $sth_authacc = $dbh->prepare
+        ('SELECT actor, permission, weight ' .
+         'FROM ' . $network . '_AUTH_ACC ' .
+         'WHERE account_name=? AND perm=?');
+
+    $sth_perms->execute($acc);
     my $perms = $sth_perms->fetchall_arrayref({});
     foreach my $permission (@{$perms}) {
-        $sth_keys->execute($network, $acc, $permission->{'perm'});
+        $sth_keys->execute($acc, $permission->{'perm'});
         $permission->{'auth'}{'keys'} = $sth_keys->fetchall_arrayref({});
         foreach my $row (@{$permission->{'auth'}{'keys'}})
         {
@@ -730,7 +617,7 @@ sub get_permissions
             $row->{'public_key'} = $newformat;
         }
 
-        $sth_authacc->execute($network, $acc, $permission->{'perm'});
+        $sth_authacc->execute($acc, $permission->{'perm'});
         $permission->{'auth'}{'accounts'} = $sth_authacc->fetchall_arrayref({});
     }
     return $perms;
@@ -744,7 +631,11 @@ sub get_authorized_accounts
     my $permission = shift;
     my $accounts = shift;
 
-    $sth_acc_by_actor->execute($network, $acc, $permission);
+    my $sth_acc_by_actor = $dbh->prepare
+            ('SELECT account_name, perm ' .
+             'FROM ' . $network . '_AUTH_ACC ' .
+             'WHERE actor=? AND permission=? LIMIT 100');
+    $sth_acc_by_actor->execute($acc, $permission);
     my $res = $sth_acc_by_actor->fetchall_arrayref({});
 
     foreach my $r (@{$res})
@@ -806,7 +697,13 @@ $builder->mount
          my $req = Plack::Request->new($env);
 
          check_dbserver();
-         my $result = get_allnetworks();
+         my $sth_allnetworks = $dbh->prepare
+             ('SELECT NETWORKS.network, chainid, description, systoken, decimals, production, ' .
+              'TIME_TO_SEC(TIMEDIFF(UTC_TIMESTAMP(), block_time)) as sync, ' .
+              'block_num, block_time ' .
+              'FROM NETWORKS JOIN SYNC ON NETWORKS.network=SYNC.network');
+         $sth_allnetworks->execute();
+         my $result = $sth_allnetworks->fetchall_arrayref({});
 
          my $res = $req->new_response(200);
          $res->content_type('application/json');
@@ -989,7 +886,12 @@ $builder->mount
          my $contract = $3;
          my $currency = $4;
          check_dbserver();
-         $sth_tokenbal->execute($network, $acc, $contract, $currency);
+
+         my $sth_tokenbal = $dbh->prepare
+             ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals ' .
+              'FROM ' . $network . '_CURRENCY_BAL ' .
+              'WHERE account_name=? AND contract=? AND currency=?');
+         $sth_tokenbal->execute($acc, $contract, $currency);
          my $r = $sth_tokenbal->fetchall_arrayref({});
          my $result = '0';
          if( scalar(@{$r}) > 0 )
@@ -997,7 +899,11 @@ $builder->mount
              $result = sprintf('%.'.$r->[0]{'decimals'} . 'f', $r->[0]{'amount'});
          }
 
-         $sth_tokenbal_upd->execute($network, $acc, $contract, $currency);
+         my $sth_tokenbal_upd = $dbh->prepare
+             ('SELECT CAST(amount AS DECIMAL(48,24)) AS amount, decimals, deleted ' .
+              'FROM ' . $network . '_UPD_CURRENCY_BAL ' .
+              'WHERE account_name=? AND contract=? AND currency=? ORDER BY id');
+         $sth_tokenbal_upd->execute($acc, $contract, $currency);
          my $updates = $sth_tokenbal_upd->fetchall_arrayref({});
          foreach my $row (@{$updates})
          {
@@ -1038,7 +944,12 @@ $builder->mount
          }
 
          check_dbserver();
-         $sth_topholders->execute($network, $contract, $currency, $count);
+         my $sth_topholders = $dbh->prepare
+            ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
+             'FROM ' . $network . '_CURRENCY_BAL ' .
+             'WHERE contract=? AND currency=? ' .
+             'ORDER BY amount DESC LIMIT ?');
+         $sth_topholders->execute($contract, $currency, $count);
          my $all = $sth_topholders->fetchall_arrayref({});
          my $result = [];
          foreach my $r (@{$all})
@@ -1069,18 +980,22 @@ $builder->mount
          my $currency = $3;
 
          check_dbserver();
-         $sth_holdercount->execute($network, $contract, $currency);
+         my $sth_holdercount = $dbh->prepare
+             ('SELECT holders ' .
+              'FROM ' . $network . '_HOLDERCOUNTS ' .
+              'WHERE contract=? AND currency=?');
+         $sth_holdercount->execute($contract, $currency);
          my $r = $sth_holdercount->fetchall_arrayref();
          my $result = '0';
          if( scalar(@{$r}) > 0 )
          {
              $result = $r->[0];
          }
-         
+
          my $res = $req->new_response(200);
          $res->content_type('text/plain');
          $res->body($result);
-         $res->finalize;         
+         $res->finalize;
      });
 
 
@@ -1094,85 +1009,90 @@ $builder->mount
              return(error($req, 'Expected an EOSIO key'))
          }
 
+         my $result = {};
+         my $accounts = {};
+
          my $key = from_legacy_key($1);
          check_dbserver();
 
-         $sth_searchkey->execute($key);
-         my $searchres = $sth_searchkey->fetchall_arrayref({});
-         my $result = {};
+         my $sth_networks = $dbh->prepare('SELECT network FROM SYNC');
+         $sth_networks->execute();
+         my $networs_res = $sth_networks->fetchall_arrayref();
+         foreach my $netrow (@{$networs_res}) {
+             my $network = $netrow->[0];
 
-         my $accounts = {};
-
-         foreach my $r (@{$searchres})
-         {
-             my $network = $r->{'network'};
-             if( not defined($result->{$network}) )
+             my $sth_searchkey = $dbh->prepare
+                 ('SELECT account_name, perm, pubkey, weight ' .
+                  'FROM ' . $network . '_AUTH_KEYS ' .
+                  'WHERE pubkey=? LIMIT 100');
+             $sth_searchkey->execute($key);
+             my $searchres = $sth_searchkey->fetchall_arrayref({});
+             if( scalar(@{$searchres}) > 0 )
              {
                  $result->{$network}{'chain'} = get_network($network);
-             }
-
-             $accounts->{$network}{$r->{'account_name'}}{$r->{'perm'}} = 1;
-         }
-
-         foreach my $network (keys %{$accounts})
-         {
-             foreach my $acc (keys %{$accounts->{$network}})
-             {
-                 foreach my $perm (keys %{$accounts->{$network}{$acc}})
+                 foreach my $r (@{$searchres})
                  {
-                     get_authorized_accounts($network, $acc, $perm, $accounts);
+                     $accounts->{$network}{$r->{'account_name'}}{$r->{'perm'}} = 1;
+                 }
+
+                 foreach my $acc (keys %{$accounts->{$network}})
+                 {
+                     foreach my $perm (keys %{$accounts->{$network}{$acc}})
+                     {
+                         get_authorized_accounts($network, $acc, $perm, $accounts);
+                     }
                  }
              }
-         }
 
-         $sth_auth_upd->execute();
-         my $updates = $sth_auth_upd->fetchall_arrayref({});
+             my $sth_auth_upd = $dbh->prepare
+                 ('SELECT account_name, perm, jsdata, deleted ' .
+                  'FROM ' . $network . '_UPD_AUTH ORDER BY id');
+             $sth_auth_upd->execute();
+             my $updates = $sth_auth_upd->fetchall_arrayref({});
 
-         foreach my $row (@{$updates})
-         {
-             my $auth = $row->{'auth'} = $json->decode($row->{'jsdata'});
-             foreach my $keydata (@{$auth->{'keys'}})
+             foreach my $row (@{$updates})
              {
-                 if( $keydata->{'key'} eq $key )
+                 my $auth = $row->{'auth'} = $json->decode($row->{'jsdata'});
+                 foreach my $keydata (@{$auth->{'keys'}})
                  {
-                     $accounts->{$row->{'network'}}{$row->{'account_name'}}{$row->{'perm'}} = 1;
-                     get_authorized_accounts($row->{'network'}, $row->{'account_name'},
-                                             $row->{'perm'}, $accounts);
+                     if( $keydata->{'key'} eq $key )
+                     {
+                         $accounts->{$network}{$row->{'account_name'}}{$row->{'perm'}} = 1;
+                         get_authorized_accounts($network, $row->{'account_name'},
+                                                 $row->{'perm'}, $accounts);
+                     }
                  }
              }
-         }
 
-         foreach my $network (keys %{$accounts})
-         {
              foreach my $acc (keys %{$accounts->{$network}})
              {
                  $result->{$network}{'accounts'}{$acc} = get_permissions($network, $acc);
              }
-         }
 
-         foreach my $row (@{$updates})
-         {
-             my $network = $row->{'network'};
-             my $acc = $row->{'account_name'};
-             if( defined($result->{$network}{'accounts'}{$acc}) )
+
+             foreach my $row (@{$updates})
              {
-                 my $perms = $result->{$network}{'accounts'}{$acc};
-                 my $newperms = [];
-
-                 foreach my $p (@{$perms})
+                 my $acc = $row->{'account_name'};
+                 if( defined($result->{$network}{'accounts'}{$acc}) )
                  {
-                     if( $p->{'perm'} ne $row->{'perm'} )
+                     my $perms = $result->{$network}{'accounts'}{$acc};
+                     my $newperms = [];
+
+                     foreach my $p (@{$perms})
                      {
-                         push(@{$newperms}, $p);
+                         if( $p->{'perm'} ne $row->{'perm'} )
+                         {
+                             push(@{$newperms}, $p);
+                         }
                      }
-                 }
 
-                 if( not $row->{'deleted'} )
-                 {
-                     push(@{$newperms}, auth_upd_row_to_perm($row, $row->{'auth'}));
-                 }
+                     if( not $row->{'deleted'} )
+                     {
+                         push(@{$newperms}, auth_upd_row_to_perm($row, $row->{'auth'}));
+                     }
 
-                 $result->{$network}{'accounts'}{$acc} = $newperms;
+                     $result->{$network}{'accounts'}{$acc} = $newperms;
+                 }
              }
          }
 
@@ -1197,7 +1117,9 @@ $builder->mount
          my $network = $1;
          check_dbserver();
 
-         $sth_usercount->execute($network);
+         my $sth_usercount = $dbh->prepare
+             ('SELECT count(*) as usercount FROM ' . $network . '_USERRES');
+         $sth_usercount->execute();
          my $r = $sth_usercount->fetchall_arrayref();
 
          my $res = $req->new_response(200);
@@ -1226,7 +1148,11 @@ $builder->mount
          }
 
          check_dbserver();
-         $sth_topram->execute($network, $count);
+         my $sth_topram = $dbh->prepare
+             ('SELECT account_name, ram_bytes FROM ' . $network . '_USERRES ' .
+              'ORDER BY ram_bytes DESC LIMIT ?');
+
+         $sth_topram->execute($count);
          my $all = $sth_topram->fetchall_arrayref({});
          my $result = [];
          foreach my $r (@{$all})
@@ -1261,7 +1187,10 @@ $builder->mount
          }
 
          check_dbserver();
-         $sth_topstake->execute($network, $count);
+         my $sth_topstake = $dbh->prepare
+             ('SELECT account_name, cpu_weight, net_weight FROM ' . $network . '_USERRES ' .
+              'ORDER BY weight_sum DESC LIMIT ?');
+         $sth_topstake->execute($count);
          my $all = $sth_topstake->fetchall_arrayref({});
          my $result = [];
          foreach my $r (@{$all})
@@ -1290,20 +1219,30 @@ $builder->mount
 
          my $codehash = $1;
          check_dbserver();
-
-         $sth_searchcode->execute($codehash);
-         my $searchres = $sth_searchcode->fetchall_arrayref({});
          my $result = {};
 
-         foreach my $r (@{$searchres})
-         {
-             my $network = $r->{'network'};
-             if( not defined($result->{$network}) )
+         my $sth_networks = $dbh->prepare('SELECT network FROM SYNC');
+         $sth_networks->execute();
+         my $networs_res = $sth_networks->fetchall_arrayref();
+         foreach my $netrow (@{$networs_res}) {
+             my $network = $netrow->[0];
+
+             my $sth_searchcode = $dbh->prepare
+                 ('SELECT account_name, code_hash ' .
+                  'FROM ' . $network . '_CODEHASH ' .
+                  'WHERE code_hash=?');
+
+             $sth_searchcode->execute($codehash);
+             my $searchres = $sth_searchcode->fetchall_arrayref({});
+
+             if( scalar(@{$searchres}) > 0 )
              {
                  $result->{$network}{'chain'} = get_network($network);
+                 foreach my $r (@{$searchres})
+                 {
+                     $result->{$network}{'accounts'}{$r->{'account_name'}} = $r;
+                 }
              }
-
-             $result->{$network}{'accounts'}{$r->{'account_name'}} = $r;
          }
 
          my $res = $req->new_response(200);
@@ -1362,7 +1301,7 @@ $builder->mount
                  $http_status = 503;
              }
          }
-         
+
          my $res = $req->new_response($http_status);
          $res->content_type('text/plain');
          $res->body(join(' ', $status, $failed));
