@@ -35,27 +35,26 @@ my $dbh = DBI->connect($dsn, $db_user, $db_password,
                         mariadb_server_prepare => 1});
 die($DBI::errstr) unless $dbh;
 
-my $sth_ins = $dbh->prepare
-    ('INSERT INTO HOLDERCOUNTS(holders,network,contract,currency) VALUES(?,?,?,?)');
-
-my $sth_upd = $dbh->prepare
-    ('UPDATE HOLDERCOUNTS SET holders=? WHERE network=? AND contract=? AND currency=?');
-
-my $sth_del = $dbh->prepare
-    ('DELETE FROM HOLDERCOUNTS WHERE network=? AND contract=? AND currency=?');
-
-
-my $networks = $dbh->selectall_arrayref('SELECT network from NETWORKS');
+my $networks = $dbh->selectall_arrayref('SELECT network from SYNC');
 
 foreach my $netrow (@{$networks})
 {
     my $network = $netrow->[0];
 
+    my $sth_ins = $dbh->prepare
+        ('INSERT INTO ' . $network . '_HOLDERCOUNTS(holders,contract,currency) VALUES(?,?,?)');
+    
+    my $sth_upd = $dbh->prepare
+        ('UPDATE ' . $network . '_HOLDERCOUNTS SET holders=? WHERE contract=? AND currency=?');
+    
+    my $sth_del = $dbh->prepare
+        ('DELETE FROM ' . $network . '_HOLDERCOUNTS WHERE contract=? AND currency=?');
+    
     my $chain_count_rows = $dbh->selectall_arrayref
-        ('SELECT contract,currency,COUNT(*) FROM CURRENCY_BAL WHERE network=\'' . $network . '\' ' . 
+        ('SELECT contract,currency,COUNT(*) FROM ' . $network . '_CURRENCY_BAL ' . 
          'GROUP BY contract,currency');
     my $db_count_rows = $dbh->selectall_arrayref
-        ('SELECT contract,currency,holders FROM HOLDERCOUNTS WHERE network=\'' . $network . '\' ');
+        ('SELECT contract,currency,holders FROM ' . $network . '_HOLDERCOUNTS');
 
     my %db_counts;
     foreach my $r (@{$db_count_rows})
@@ -72,12 +71,12 @@ foreach my $netrow (@{$networks})
         {
             if( $db_counts{$r->[0]}{$r->[1]} != $r->[2])
             {
-                $sth_upd->execute($r->[2], $network, $r->[0], $r->[1]);
+                $sth_upd->execute($r->[2], $r->[0], $r->[1]);
             }
         }
         else
         {
-            $sth_ins->execute($r->[2], $network, $r->[0], $r->[1]);
+            $sth_ins->execute($r->[2], $r->[0], $r->[1]);
         }
     }
 
@@ -85,7 +84,7 @@ foreach my $netrow (@{$networks})
     {
         if( not exists($chain_counts{$r->[0]}{$r->[1]}) )
         {
-            $sth_del->execute($network, $r->[0], $r->[1]);
+            $sth_del->execute($r->[0], $r->[1]);
         }
     }
 

@@ -278,9 +278,9 @@ sub process_data
         my $hash = '';
         my $deleted = 1;
 
-        if( defined($data->{'account_metadata'}{'code_metadata'}) )
+        if( defined($data->{'account_metadata'}{'code'}) )
         {
-            $hash = $data->{'account_metadata'}{'code_metadata'}{'code_hash'};
+            $hash = $data->{'account_metadata'}{'code'}{'code_hash'};
             $deleted = 0;
         }
             
