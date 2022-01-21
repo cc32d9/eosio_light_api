@@ -152,7 +152,7 @@ User discussion and support in Telegram: https://t.me/lightapi
 [A list of public API endpoints](endpoints.json) is served by IPFS,
 and available with the following link:
 
-* https://endpoints.light.xeos.me/endpoints.json  (served by Cloudflare)
+* https://endpoints.light-api.net/endpoints.json  (served by Cloudflare)
 
 
 
