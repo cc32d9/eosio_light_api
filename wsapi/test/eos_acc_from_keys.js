@@ -2,7 +2,7 @@
 
 const RPCClient = require('jsonrpc2-ws').Client;
 
-const client = new RPCClient('wss://lightapi.eosgeneva.io/wsapi');
+const client = new RPCClient('wss://eos.light-api.net/wsapi');
 
 
 client.on('connected', () => { console.log('connected'); });
@@ -22,21 +22,18 @@ async function send_req() {
     client.call("get_networks")
         .then(networks => {
             console.log(JSON.stringify(networks, null, 2));
-            if( networks.jungle != undefined ) {
-                client.call("get_balances", {
+            if( networks.eos != undefined ) {
+                client.call("get_accounts_from_keys", {
                     reqid: 100,
-                    network: 'jungle',
-                    accounts: ['cc32dninexxx', 'training1111'] })
+                    network: 'eos',
+                    keys: ['PUB_K1_5VixV8YBKz6vkFCXzLauNmLfyHEVx6ipzYHoKbDL1uojZnYFPz',
+                           'PUB_K1_6kjcm42sprt55d9zoPgJagZEyxpwAztHNexjBvSkJsQoQVB8MH'] })
                     .then(res => {
                         console.log(JSON.stringify(res, null, 2));
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        process.exit();
                     });
             }
             else {
-                throw Error('Cannot find jungle');
+                throw Error('Cannot find eos');
             }
         })
         .catch(err => {
@@ -44,6 +41,7 @@ async function send_req() {
             process.exit();
         });
 }
+
 
 send_req();
 
