@@ -241,23 +241,18 @@ The database schema is available in
 [sql/lightapi_dbcreate.sql](sql/lightapi_dbcreate.sql).
 
 ```
-# EOS and Telos data:
 mysql --host=pubdb.eu.eosamsterdam.net --port=3301 --user=lightapiro \
-  --password=lightapiro --database=lightapi
-
-# BOS, Instar, Proton, WAX, Europechain(XEC)
-mysql --host=pubdb.eu.eosamsterdam.net --port=3302 --user=lightapiro \
   --password=lightapiro --database=lightapi
 ```
 
 Query examples:
 
 ```
-select * from CURRENCY_BAL where network='wax' and account_name = 'cc32dninexxx';
+select * from wax_CURRENCY_BAL where account_name = 'cc32dninexxx';
 
-select * from CURRENCY_BAL where network='wax' and contract='eosio.token' and currency='WAX' and amount > 500000;
+select * from wax_CURRENCY_BAL where contract='eosio.token' and currency='WAX' and amount > 500000;
 
-select count(*) from USERRES where network='wax' and account_name like '%.wam';
+select count(*) from wax_USERRES where account_name like '%.wam';
 ```
 
 
