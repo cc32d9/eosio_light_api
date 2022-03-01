@@ -54,9 +54,9 @@ my %stakebal;
 my %rextotal;
 
 my $sth = $dbh->prepare
-    ('SELECT account_name FROM AUTH_THRESHOLDS WHERE network=? AND perm=\'active\'');
+    ('SELECT account_name FROM ' . $network . '_AUTH_THRESHOLDS WHERE perm=\'active\'');
 
-$sth->execute($network);
+$sth->execute();
 while( my $r = $sth->fetchrow_arrayref() )
 {
     $accounts{$r->[0]} = 1;
@@ -64,9 +64,9 @@ while( my $r = $sth->fetchrow_arrayref() )
 
 
 $sth = $dbh->prepare
-    ('SELECT account_name, amount FROM CURRENCY_BAL WHERE network=? AND contract=\'eosio.token\' AND currency=?');
+    ('SELECT account_name, amount FROM ' . $network . '_CURRENCY_BAL WHERE contract=\'eosio.token\' AND currency=?');
 
-$sth->execute($network, $systoken);
+$sth->execute($systoken);
 while( my $r = $sth->fetchrow_arrayref() )
 {
     my $acc = $r->[0];
@@ -75,9 +75,9 @@ while( my $r = $sth->fetchrow_arrayref() )
 
 
 $sth = $dbh->prepare
-    ('SELECT del_from, cpu_weight+net_weight FROM DELBAND WHERE network=?');
+    ('SELECT del_from, cpu_weight+net_weight FROM ' . $network . '_DELBAND');
 
-$sth->execute($network);
+$sth->execute();
 while( my $r = $sth->fetchrow_arrayref() )
 {
     my $acc = $r->[0];
@@ -96,7 +96,7 @@ while( my $r = $sth->fetchrow_arrayref() )
 
 
 $res = $dbh->selectall_arrayref
-    ('SELECT total_lendable/(total_rex*10000) FROM REXPOOL WHERE network=\'' . $network . '\'');
+    ('SELECT total_lendable/(total_rex*10000) FROM ' . $network . '_REXPOOL');
 
 if( scalar(@{$res}) )
 {
@@ -107,10 +107,9 @@ if( scalar(@{$res}) )
     $sth = $dbh->prepare
         ('SELECT ' .
          'account_name, balance ' .
-         'FROM REXFUND ' .
-         'WHERE network=?');
+         'FROM ' . $network . '_REXFUND');
 
-    $sth->execute($network);
+    $sth->execute();
     while( my $r = $sth->fetchrow_arrayref() )
     {
         my $acc = $r->[0];
@@ -122,10 +121,9 @@ if( scalar(@{$res}) )
     $sth = $dbh->prepare
         ('SELECT ' .
          'account_name, matured_rex, rex_maturities ' .
-         'FROM REXBAL ' .
-         'WHERE network=?');
+         'FROM ' . $network . '_REXBAL');
 
-    $sth->execute($network);
+    $sth->execute();
     while( my $r = $sth->fetchrow_arrayref() )
     {
         my $acc = $r->[0];
