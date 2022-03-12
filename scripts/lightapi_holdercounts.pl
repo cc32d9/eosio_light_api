@@ -51,7 +51,7 @@ foreach my $netrow (@{$networks})
         ('DELETE FROM ' . $network . '_HOLDERCOUNTS WHERE contract=? AND currency=?');
     
     my $chain_count_rows = $dbh->selectall_arrayref
-        ('SELECT contract,currency,COUNT(*) FROM ' . $network . '_CURRENCY_BAL ' . 
+        ('SELECT contract,currency,COUNT(*) FROM ' . $network . '_CURRENCY_BAL WHERE amount>0 ' . 
          'GROUP BY contract,currency');
     my $db_count_rows = $dbh->selectall_arrayref
         ('SELECT contract,currency,holders FROM ' . $network . '_HOLDERCOUNTS');
