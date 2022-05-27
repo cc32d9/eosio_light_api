@@ -190,7 +190,7 @@ CREATE TABLE %%_UPD_AUTH
  block_time        DATETIME NOT NULL,
  perm              VARCHAR(13) NOT NULL,
  parent            VARCHAR(13) NOT NULL,
- jsdata            BLOB NOT NULL,
+ jsdata            MEDIUMBLOB NOT NULL,
  deleted           TINYINT NOT NULL
 ) ENGINE=InnoDB;
 
