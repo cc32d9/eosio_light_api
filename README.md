@@ -184,20 +184,21 @@ writes the blockchain information in real time into the local MariaDB
 database.
 
 ```
-sudo apt-get install git make cpanminus gcc g++ mariadb-server \
+apt-get install git make cpanminus gcc g++ mariadb-server \
 libmysqlclient-dev libdbi-perl libjson-xs-perl libjson-perl libdatetime-format-iso8601-perl
 
-sudo cpanm DBD::MariaDB
-sudo cpanm Starman
-sudo cpanm Net::WebSocket::Server
-sudo cpanm Crypt::Digest::RIPEMD160;
+cpanm --notest DBD::MariaDB
+cpanm --notest Starman
+cpanm --notest Net::WebSocket::Server
+cpanm --notest Crypt::Digest::RIPEMD160;
 
 
 git clone https://github.com/cc32d9/eosio_light_api.git /opt/eosio_light_api
-cd /opt/eosio_light_api
 
-sudo mysql <sql/lightapi_dbcreate.sql
-sh setup/add_eos_mainnet.sh
+cd /opt/eosio_light_api/sql
+mysql <lightapi_dbcreate.sql
+sh create_tables.sh eos
+sh cd /opt/eosio_light_api/setup/add_eos_mainnet.sh
 
 curl -sL https://deb.nodesource.com/setup_13.x | bash -
 apt install -y nodejs
@@ -211,7 +212,7 @@ vi /etc/default/lightapi_eos
 # Optionally, edit /etc/default/lightapi_api and adjust variables
 # that are predefined in systemd/lightapi_api.service
 
-cd systemd
+cd /opt/eosio_light_api/systemd
 sh install_systemd_dbwrite.sh eos
 sh install_systemd_api.sh
 sh install_systemd_wsapi.sh 5101 5102 5103 5104 5105
@@ -224,6 +225,49 @@ sh install_systemd_wsapi.sh 5101 5102 5103 5104 5105
 cat >/etc/cron.d/lightapi <<'EOT'
 */5 * * * * root perl /opt/eosio_light_api/scripts/lightapi_holdercounts.pl
 EOT
+
+## set up chronicle
+
+cd /var/local
+wget https://github.com/EOSChronicleProject/eos-chronicle/releases/download/v2.2/eosio-chronicle-2.2-Clang-11.0.1-ubuntu20.04-x86_64.deb
+apt install ./eosio-chronicle-2.2-Clang-11.0.1-ubuntu20.04-x86_64.deb
+cp /usr/local/share/chronicle_receiver\@.service /etc/systemd/system/
+systemctl daemon-reload
+
+
+# Chronicle configuration:
+# host, port point to the EOSIO/Leap state history source
+# exp-ws-host, exp-ws-port point to the lightapi_dbwrite.pl process
+# blacklist reduces the amount of processing on bulky contracts
+mkdir -p /srv/eos/chronicle-config
+cat >/srv/eos/chronicle-config/config.ini <<'EOT'
+host = 10.0.3.1
+port = 9090
+mode = scan
+plugin = exp_ws_plugin
+exp-ws-host = 127.0.0.1
+exp-ws-port = 8100
+exp-ws-bin-header = true
+skip-block-events = true
+skip-traces = true
+blacklist-tables-contract = atomicassets
+blacklist-tables-contract = atomicmarket
+EOT
+
+# You need to initialize the Chronicle database from the first block
+# in the state history archive. See the Chronicle Tutorial for more
+# details. You may point it to some other state history source during
+# the initialization. Here we launch it in scan-noexport mode for faster initialization.
+/usr/local/sbin/chronicle-receiver --config-dir=/srv/eos/chronicle-config \
+ --data-dir=/srv/eos/chronicle-data \
+ --host=my.ship.host.domain.com --port=8080 \
+ --start-block=186332760 
+
+# Once it displays the progress of acknowledged blocks, stop it and start as a service
+systemctl enable chronicle_receiver@memento_wax1
+systemctl start chronicle_receiver@memento_wax1
+
+
 ```
 
 
