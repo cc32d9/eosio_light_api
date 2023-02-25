@@ -1,83 +1,46 @@
 {
     "api-endpoints": {
         "https://eos.light-api.net": {
-            "country": [
-                "NL",
-                "US"
-            ],
+            "country": ["NL","US"],
             "continent": "ANY",
-            "admin": "cc32d9@eosamsterdam.net",
-            "networks": [
-                "eos"
-            ]
+            "admin":"cc32d9@eosamsterdam.net",
+            "networks": ["eos"]
         },
         "https://instar.light-api.net": {
-            "country": [
-                "NL",
-                "US"
-            ],
+            "country": ["NL","US"],
             "continent": "ANY",
-            "admin": "cc32d9@eosamsterdam.net",
-            "networks": [
-                "instar"
-            ]
+            "admin":"cc32d9@eosamsterdam.net",
+            "networks": ["instar"]
         },
         "https://proton.light-api.net": {
-            "country": [
-                "NL",
-                "US"
-            ],
+            "country": ["NL","US"],
             "continent": "ANY",
-            "admin": "cc32d9@eosamsterdam.net",
-            "networks": [
-                "proton"
-            ]
+            "admin":"cc32d9@eosamsterdam.net",
+            "networks": ["proton"]
         },
         "https://telos.light-api.net": {
-            "country": [
-                "NL",
-                "US"
-            ],
+            "country": ["NL","US"],
             "continent": "ANY",
-            "admin": "cc32d9@eosamsterdam.net",
-            "networks": [
-                "telos"
-            ]
+            "admin":"cc32d9@eosamsterdam.net",
+            "networks": ["telos"]
         },
         "https://wax.light-api.net": {
-            "country": [
-                "NL",
-                "US"
-            ],
+            "country": ["NL","US"],
             "continent": "ANY",
-            "admin": "cc32d9@eosamsterdam.net",
-            "networks": [
-                "wax"
-            ]
+            "admin":"cc32d9@eosamsterdam.net",
+            "networks": ["wax"]
         },
         "https://xec.light-api.net": {
-            "country": [
-                "NL",
-                "US"
-            ],
+            "country": ["NL","US"],
             "continent": "ANY",
-            "admin": "cc32d9@eosamsterdam.net",
-            "networks": [
-                "xec"
-            ]
+            "admin":"cc32d9@eosamsterdam.net",
+            "networks": ["xec"]
         },
         "https://testnet-lightapi.eosams.xeos.me": {
-            "country": [
-                "NL"
-            ],
+            "country": ["NL"],
             "continent": "EU",
-            "admin": "cc32d9@eosamsterdam.net",
-            "networks": [
-                "kylin",
-                "protontest",
-                "telostest",
-                "waxtest"
-            ]
+            "admin":"cc32d9@eosamsterdam.net",
+            "networks": ["kylin","protontest","telostest","waxtest"]
         }
     },
     "networks": {
