@@ -41,7 +41,13 @@
             "continent": "EU",
             "admin":"cc32d9@eosamsterdam.net",
             "networks": ["kylin","protontest","telostest","waxtest"]
-        }
+        },
+	"http://light.libre.quantumblok.com": {
+            "country": ["US"],
+            "continent": "ANY",
+            "admin":"light@benobi.one",
+            "networks": ["libre"]
+        },
     },
     "networks": {
         "eos": {
