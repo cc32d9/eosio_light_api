@@ -197,15 +197,15 @@ git clone https://github.com/cc32d9/eosio_light_api.git /opt/eosio_light_api
 
 cd /opt/eosio_light_api/sql
 mysql <lightapi_dbcreate.sql
-sh create_tables.sh eos # change "eos" to another network if needed 
-sh cd /opt/eosio_light_api/setup/add_eos_mainnet.sh # change "eos" to another network if needed 
+sh create_tables.sh eos
+sh cd /opt/eosio_light_api/setup/add_eos_mainnet.sh
 
 curl -sL https://deb.nodesource.com/setup_13.x | bash -
 apt install -y nodejs
 cd /opt/eosio_light_api/wsapi
 npm install
 
-vi /etc/default/lightapi_eos # change "eos" to another network if needed 
+vi /etc/default/lightapi_eos
 # add the Chronicle consumer socket details:
 # DBWRITE_OPTS=--port=8100
 
@@ -213,7 +213,7 @@ vi /etc/default/lightapi_eos # change "eos" to another network if needed
 # that are predefined in systemd/lightapi_api.service
 
 cd /opt/eosio_light_api/systemd
-sh install_systemd_dbwrite.sh eos # change "eos" to another network if needed 
+sh install_systemd_dbwrite.sh eos
 sh install_systemd_api.sh
 sh install_systemd_wsapi.sh 5101 5102 5103 5104 5105
 
@@ -258,18 +258,14 @@ EOT
 # in the state history archive. See the Chronicle Tutorial for more
 # details. You may point it to some other state history source during
 # the initialization. Here we launch it in scan-noexport mode for faster initialization.
-
-# change "eos" to another network if needed 
-
 /usr/local/sbin/chronicle-receiver --config-dir=/srv/eos/chronicle-config \
  --data-dir=/srv/eos/chronicle-data \
  --host=my.ship.host.domain.com --port=8080 \
  --start-block=186332760 
 
-# Once it displays the progress of acknowledged blocks, stop it and start as a service 
-# change "eos" to another network if needed 
-systemctl enable chronicle_receiver@eos
-systemctl start chronicle_receiver@eos
+# Once it displays the progress of acknowledged blocks, stop it and start as a service
+systemctl enable chronicle_receiver@memento_wax1
+systemctl start chronicle_receiver@memento_wax1
 
 
 ```
