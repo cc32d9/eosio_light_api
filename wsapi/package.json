@@ -13,7 +13,7 @@
     "dependencies": {
         "nconf": ">= 0.10.0",
         "mariadb": ">= 2.5.5",
-        "jsonrpc2-ws": ">= 1.0.0-beta18",
+        "jsonrpc2-ws": ">= 1.0.0-beta24",
         "eosjs": ">= 20.0.0"
     }
 }
