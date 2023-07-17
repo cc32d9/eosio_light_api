@@ -95,7 +95,7 @@ Net::WebSocket::Server->new(
                 } 
                 
                 my $ack = process_data($msgtype, $data, \$js);
-                if( $ack > 0 )
+                if( $ack >= 0 )
                 {
                     $conn->send_binary(sprintf("%d", $ack));
                     print STDERR "ack $ack\n";
@@ -288,14 +288,6 @@ sub process_data
             ($data->{'account_metadata'}{'name'}, $block_num, $block_time,
              $hash, $deleted);
 
-    }
-    elsif( $msgtype == 1009 ) # CHRONICLE_MSGTYPE_RCVR_PAUSE
-    {
-        if( $unconfirmed_block > $confirmed_block )
-        {
-            $confirmed_block = $unconfirmed_block;
-            return $confirmed_block;
-        }
     }
     elsif( $msgtype == 1010 ) # CHRONICLE_MSGTYPE_BLOCK_COMPLETED
     {
@@ -578,7 +570,7 @@ sub process_data
             return $confirmed_block;
         }
     }
-    return 0;
+    return -1;
 }
 
 
