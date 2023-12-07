@@ -41,7 +41,13 @@
             "continent": "EU",
             "admin":"cc32d9@eosamsterdam.net",
             "networks": ["kylin","protontest","telostest","waxtest"]
-        }
+        },
+	"http://light.libre.quantumblok.com": {
+            "country": ["US"],
+            "continent": "ANY",
+            "admin":"light@benobi.one",
+            "networks": ["libre"]
+        },
     },
     "networks": {
         "eos": {
@@ -118,6 +124,13 @@
             "chainid": "f778f7d2f124b110e0a71245b310c1d0ac1a0edd21f131c5ecb2e2bc03e8fe2e",
             "description": "Europechain",
             "systoken": "XEC",
+            "decimals": 4,
+            "production": 1
+        },
+        "libre": {
+            "chainid": "38b1d7815474d0c60683ecbea321d723e83f5da6ae5f1c1f9fecc69d9ba96465",
+            "description": "Libre",
+            "systoken": "LIBRE",
             "decimals": 4,
             "production": 1
         }
