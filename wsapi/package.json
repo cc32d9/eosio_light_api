@@ -11,7 +11,7 @@
         "node": ">= 0.8.0"
     },
     "dependencies": {
-        "nconf": ">= 0.10.0",
+        "nconf": ">= 0.11.4",
         "mariadb": ">= 2.5.5",
         "jsonrpc2-ws": ">= 1.0.0-beta18",
         "eosjs": ">= 20.0.0"
