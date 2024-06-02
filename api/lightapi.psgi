@@ -929,14 +929,15 @@ $builder->mount
          my $req = Plack::Request->new($env);
          my $path_info = $req->path_info;
 
-         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([A-Z]{1,7})\/(\d+)$/ ) {
-             return(error($req, 'Expected network name, contract, token name, count in URL path'));
+         if ( $path_info !~ /^\/(\w+)\/([a-z1-5.]{1,13})\/([A-Z]{1,7})\/(\d+)(\/(\d+))?$/ ) {
+             return(error($req, 'Expected network name, contract, token name, count, marker in URL path'));
          }
 
          my $network = $1;
          my $contract = $2;
          my $currency = $3;
          my $count = $4;
+         my $marker = $6;
 
          if( $count < 10 or $count > 1000 )
          {
@@ -944,12 +945,23 @@ $builder->mount
          }
 
          check_dbserver();
-         my $sth_topholders = $dbh->prepare
-            ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
-             'FROM ' . $network . '_CURRENCY_BAL ' .
-             'WHERE contract=? AND currency=? ' .
-             'ORDER BY amount DESC LIMIT ?');
-         $sth_topholders->execute($contract, $currency, $count);
+
+         my $sth_topholders;
+         if ( $marker ) {
+            $sth_topholders = $dbh->prepare
+                ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
+                'FROM ' . $network . '_CURRENCY_BAL ' .
+                'WHERE contract=? AND currency=? AND amount < ? ' .
+                'ORDER BY amount DESC LIMIT ?');
+            $sth_topholders->execute($contract, $currency, $marker, $count);
+         } else {
+            $sth_topholders = $dbh->prepare
+                ('SELECT account_name, CAST(amount AS DECIMAL(48,24)) AS amt, decimals ' .
+                'FROM ' . $network . '_CURRENCY_BAL ' .
+                'WHERE contract=? AND currency=? ' .
+                'ORDER BY amount DESC LIMIT ?');
+            $sth_topholders->execute($contract, $currency, $count);
+         }
          my $all = $sth_topholders->fetchall_arrayref({});
          my $result = [];
          foreach my $r (@{$all})
@@ -1135,12 +1147,13 @@ $builder->mount
          my $req = Plack::Request->new($env);
          my $path_info = $req->path_info;
 
-         if ( $path_info !~ /^\/(\w+)\/(\d+)$/ ) {
-             return(error($req, 'Expected a network name and count in URL path'));
+         if ( $path_info !~ /^\/(\w+)\/(\d+)(\/(\d+))?$/ ) {
+             return(error($req, 'Expected a network name, count and marker in URL path'));
          }
 
          my $network = $1;
          my $count = $2;
+         my $marker = $4;
 
          if( $count < 10 or $count > 1000 )
          {
@@ -1148,11 +1161,21 @@ $builder->mount
          }
 
          check_dbserver();
-         my $sth_topram = $dbh->prepare
-             ('SELECT account_name, ram_bytes FROM ' . $network . '_USERRES ' .
-              'ORDER BY ram_bytes DESC LIMIT ?');
 
-         $sth_topram->execute($count);
+         my $sth_topram;
+         if ( $marker ) {
+            $sth_topram = $dbh->prepare
+                ('SELECT account_name, ram_bytes FROM ' . $network . '_USERRES ' .
+                'WHERE ram_bytes < ? ' .
+                'ORDER BY ram_bytes DESC LIMIT ?');
+            $sth_topram->execute($marker, $count);
+         } else {
+            $sth_topram = $dbh->prepare
+                ('SELECT account_name, ram_bytes FROM ' . $network . '_USERRES ' .
+                'ORDER BY ram_bytes DESC LIMIT ?');
+            $sth_topram->execute($count);
+         }
+
          my $all = $sth_topram->fetchall_arrayref({});
          my $result = [];
          foreach my $r (@{$all})
