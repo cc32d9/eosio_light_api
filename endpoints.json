@@ -6,11 +6,11 @@
             "admin":"cc32d9@eosamsterdam.net",
             "networks": ["eos"]
         },
-        "https://instar.light-api.net": {
+        "https://libre.light-api.net": {
             "country": ["NL","US"],
             "continent": "ANY",
             "admin":"cc32d9@eosamsterdam.net",
-            "networks": ["instar"]
+            "networks": ["libre"]
         },
         "https://proton.light-api.net": {
             "country": ["NL","US"],
@@ -51,10 +51,10 @@
             "decimals": 4,
             "production": 1
         },
-        "instar": {
-            "chainid": "b042025541e25a472bffde2d62edd457b7e70cee943412b1ea0f044f88591664",
-            "description": "INSTAR Mainnet",
-            "systoken": "INSTAR",
+        "libre": {
+            "chainid": "38b1d7815474d0c60683ecbea321d723e83f5da6ae5f1c1f9fecc69d9ba96465",
+            "description": "Libre Mainnet",
+            "systoken": "LIBRE",
             "decimals": 4,
             "production": 1
         },
@@ -122,5 +122,5 @@
             "production": 1
         }
     },
-    "version": "3.0001"
+    "version": "3.0002"
 }
