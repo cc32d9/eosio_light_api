@@ -38,10 +38,10 @@ taking the data (such as `eos`, `telos`, `wax` etc.).
   balance. Zero is returned if the token is not present or does not
   exist.
 
-* `http://apihost.domain/api/topholders/CHAIN/CONTRACT/TOKEN/NUM` returns
+* `http://apihost.domain/api/topholders/CHAIN/CONTRACT/TOKEN/NUM[/MARKER]` returns
   top NUM holders of a specified token in a JSON array containing arrays
   of (account, amount) pairs. NUM must not be less than 10 or more than
-  1000.
+  1000. MARKER is token integer as pagination offset.
 
 * `http://apihost.domain/api/holdercount/CHAIN/CONTRACT/TOKEN` returns the
   total count of token holders as plain text. The result is "0" if the
@@ -50,9 +50,10 @@ taking the data (such as `eos`, `telos`, `wax` etc.).
 * `http://apihost.domain/api/usercount/CHAIN`
   returns a plain text with total number of accounts in the network.
 
-* `http://apihost.domain/api/topram/CHAIN/NUM` returns top NUM RAM buyers
+* `http://apihost.domain/api/topram/CHAIN/NUM[/MARKER]` returns top NUM RAM buyers
   in a JSON array containing arrays of (account, bytes) pairs. NUM must
-  not be less than 10 or more than 1000.
+  not be less than 10 or more than 1000. MARKER is bytes number as pagination
+  offset.
 
 * `http://apihost.domain/api/topstake/CHAIN/NUM` returns top NUM stake
   holders by sum of CPU and Net stakes, in a JSON array containing
