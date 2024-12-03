@@ -149,11 +149,16 @@ User discussion and support in Telegram: https://t.me/lightapi
 
 ## Public endpoints
 
-[A list of public API endpoints](endpoints.json) is served by IPFS,
-and available with the following link:
+This GitHub repository is the main location for two JSON files:
 
-* https://endpoints.light-api.net/endpoints.json  (served by Cloudflare)
+* [networks.json](networks.json) lists the canonical chain names and
+  their attributes.
 
+* [endpoints.json](endpoints.json) lists some known public endpoins.
+
+Additional endpoints could be discovered from block producers' bp.json
+if they utilize the ["light-api"
+feature](https://github.com/eosrio/bp-info-standard?tab=readme-ov-file#api-features).
 
 
 ## Project sponsors
@@ -200,7 +205,7 @@ mysql <lightapi_dbcreate.sql
 sh create_tables.sh eos
 sh /opt/eosio_light_api/setup/add_eos_mainnet.sh
 
-curl -sL https://deb.nodesource.com/setup_13.x | bash -
+curl -sL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
 cd /opt/eosio_light_api/wsapi
 npm install
@@ -229,15 +234,15 @@ EOT
 ## set up chronicle
 
 cd /var/local
-wget https://github.com/EOSChronicleProject/eos-chronicle/releases/download/v2.2/eosio-chronicle-2.2-Clang-11.0.1-ubuntu20.04-x86_64.deb
-apt install ./eosio-chronicle-2.2-Clang-11.0.1-ubuntu20.04-x86_64.deb
+wget https://github.com/EOSChronicleProject/eos-chronicle/releases/download/v3.3/antelope-chronicle-3.3-Clang-11.0.1-ubuntu22.04-x86_64.deb
+apt install ./antelope-chronicle-3.3-Clang-11.0.1-ubuntu22.04-x86_64.deb
 cp /usr/local/share/chronicle_receiver\@.service /etc/systemd/system/
 systemctl daemon-reload
 
 
 # Chronicle configuration:
-# host, port point to the EOSIO/Leap state history source
-# exp-ws-host, exp-ws-port point to the lightapi_dbwrite.pl process
+# "host" and "port" point to the EOSIO/Leap state history source
+# "exp-ws-host" and "exp-ws-port" point to the lightapi_dbwrite.pl process
 # blacklist reduces the amount of processing on bulky contracts
 mkdir -p /srv/eos/chronicle-config
 cat >/srv/eos/chronicle-config/config.ini <<'EOT'
@@ -256,16 +261,16 @@ EOT
 
 # You need to initialize the Chronicle database from the first block
 # in the state history archive. See the Chronicle Tutorial for more
-# details. You may point it to some other state history source during
-# the initialization. Here we launch it in scan-noexport mode for faster initialization.
+# details. You may point it to a temporarfy state history source during
+# the initialization and later switch to the production state history.
 /usr/local/sbin/chronicle-receiver --config-dir=/srv/eos/chronicle-config \
  --data-dir=/srv/eos/chronicle-data \
  --host=my.ship.host.domain.com --port=8080 \
  --start-block=186332760 
 
 # Once it displays the progress of acknowledged blocks, stop it and start as a service
-systemctl enable chronicle_receiver@memento_wax1
-systemctl start chronicle_receiver@memento_wax1
+systemctl enable chronicle_receiver@eos
+systemctl start chronicle_receiver@eos
 
 
 ```
@@ -302,7 +307,7 @@ select count(*) from wax_USERRES where account_name like '%.wam';
 
 ## Copyright and License
 
-Copyright 2018-2021 cc32d9@gmail.com
+Copyright 2018-2024 cc32d9@gmail.com
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -316,9 +321,3 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-
-## Donations and paid service
-
-ETH address: `0x7137bfe007B15F05d3BF7819d28419EAFCD6501E`
-
-EOS account: `cc32dninexxx`
