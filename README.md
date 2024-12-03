@@ -241,9 +241,10 @@ systemctl daemon-reload
 
 
 # Chronicle configuration:
-# "host" and "port" point to the EOSIO/Leap state history source
-# "exp-ws-host" and "exp-ws-port" point to the lightapi_dbwrite.pl process
-# blacklist reduces the amount of processing on bulky contracts
+# "host" and "port" point to the EOSIO/Leap state history source.
+# "exp-ws-host" and "exp-ws-port" point to the lightapi_dbwrite.pl process.
+# "blacklist-tables-contract" reduces the amount of processing on bulky contracts.
+
 mkdir -p /srv/eos/chronicle-config
 cat >/srv/eos/chronicle-config/config.ini <<'EOT'
 host = 10.0.3.1
@@ -257,12 +258,19 @@ skip-block-events = true
 skip-traces = true
 blacklist-tables-contract = atomicassets
 blacklist-tables-contract = atomicmarket
+blacklist-tables-contract = utxomng.xsat
+blacklist-tables-contract = playuplandme
+blacklist-tables-contract = eosio.evm
 EOT
 
 # You need to initialize the Chronicle database from the first block
 # in the state history archive. See the Chronicle Tutorial for more
-# details. You may point it to a temporarfy state history source during
-# the initialization and later switch to the production state history.
+# details. You may point it to a temporarfy state history source
+# during the initialization and later switch to the production state
+# history. Big networks like WAX or EOS require a lot of RAM for
+# Chronicle to process the startup data. You may need a temporary
+# server with 256GB of RAM, or a lot of swap space.
+
 /usr/local/sbin/chronicle-receiver --config-dir=/srv/eos/chronicle-config \
  --data-dir=/srv/eos/chronicle-data \
  --host=my.ship.host.domain.com --port=8080 \
