@@ -1,0 +1,225 @@
+LightAPI for WAX: bootstrap from chain snapshot
+===============================================
+
+# temporary bootstrap server: 256GB RAM, Ubuntu 24.04
+
+apt purge -y ufw nftables unattended-upgrades
+
+apt-get update && apt upgrade -y && \
+apt-get install -y gpg git lxc-utils apparmor zfsutils-linux netfilter-persistent sysstat ntp net-tools
+
+
+cd /var/local/
+wget https://ops.store.eosnation.io/wax-snapshots-v6/snapshot-2025-10-31-08-wax-v6-0400834812.bin.zst
+zstd -d snapshot-2025-10-31-08-wax-v6-0400834812.bin.zst
+
+wget https://github.com/eos-amsterdam-rnd/wax-leap/releases/download/v5.0.3wax01/wax-leap_5.0.3wax01_amd64.deb
+dpkg-deb --vextract ./wax-leap_5.0.3wax01_amd64.deb /opt/wax-leap
+
+
+# Not creating tmpfs for the state, as it's a temporary ship that  will be isolated from blockchain
+
+mkdir -p /srv/wax/etc/
+cat >/srv/wax/etc/config.ini <<'EOT'
+chain-state-db-size-mb = 150000
+wasm-runtime = eos-vm-jit
+eos-vm-oc-enable = true
+p2p-accept-transactions = false
+api-accept-transactions = false
+read-mode = head
+http-server-address = 127.0.0.0:8888
+p2p-listen-endpoint = 127.0.0.0:9802
+plugin = eosio::chain_plugin
+plugin = eosio::chain_api_plugin
+plugin = eosio::db_size_api_plugin
+validation-mode = light
+plugin = eosio::state_history_plugin
+trace-history = true
+chain-state-history = true
+state-history-endpoint = 0.0.0.0:8080
+p2p-peer-address = wax.eu.eosamsterdam.net:9101
+EOT
+
+
+/opt/wax-leap/usr/bin/nodeos --data-dir /srv/wax/data --config-dir /srv/wax/etc --disable-replay-opts --snapshot snapshot-2025-10-31-08-wax-v6-0400834812.bin 
+
+Ctrl-C when it starts receiving blocks.
+Comment out the p2p-peer-address libne from config
+
+nohup /opt/wax-leap/usr/bin/nodeos --data-dir /srv/wax/data --config-dir /srv/wax/etc --disable-replay-opts &
+
+# Mark the first block in chain_state_history.log (not the trace_history.log!)
+
+fgrep 'history.log has blocks' nohup.out
+
+info  2025-10-31T10:04:55.136 nodeos    log.hpp:718                   open_log             ] trace_history.log has blocks 400834813-400839042
+info  2025-10-31T10:04:55.136 nodeos    log.hpp:718                   open_log             ] chain_state_history.log has blocks 400834812-400839042
+
+
+
+#### LightAPI DB container
+
+sed -i -e 's,^.*LXC_DHCP_CONFILE.*,LXC_DHCP_CONFILE=/etc/lxc/dnsmasq.conf,' /etc/default/lxc-net
+cat >/etc/lxc/dnsmasq.conf <<'EOT'
+EOT
+systemctl restart lxc-net
+
+
+cat >>/etc/lxc/dnsmasq.conf <<'EOT'
+dhcp-host=ladb,10.0.3.50
+EOT
+systemctl restart lxc-net
+
+# Ubuntu 24.04 in container
+
+DOWNLOAD_KEYSERVER="keyserver.ubuntu.com" lxc-create -n ladb -t download -- --dist ubuntu --release noble --arch amd64
+
+cat >>/var/lib/lxc/ladb/config <<'EOT'
+lxc.net.0.hwaddr = 9a:d5:5c:6a:b5:38
+EOT
+
+
+lxc-start -n ladb
+lxc-attach -n ladb
+
+apt-get update && apt-get install -y git openssh-server net-tools curl
+userdel -rf ubuntu
+exit
+
+cp -a /root/.ssh/ /var/lib/lxc/ladb/rootfs/root/
+
+# Install LightAPI inside the container
+
+ssh -A root@10.0.3.50
+
+apt remove -y unattended-upgrades
+
+cd /var/local
+wget https://github.com/EOSChronicleProject/eos-chronicle/releases/download/v3.3/antelope-chronicle-3.3-Clang-11.0.1-ubuntu22.04-x86_64.deb
+apt install ./antelope-chronicle-3.3-Clang-11.0.1-ubuntu22.04-x86_64.deb
+cp /usr/local/share/chronicle_receiver\@.service /etc/systemd/system/
+systemctl daemon-reload
+
+
+
+apt install -y mariadb-server
+systemctl stop mariadb
+
+cat >/etc/mysql/mariadb.conf.d/90-lightapi.cnf <<'EOT'
+[mysqld]
+server_id=501
+bind-address=0.0.0.0
+default_storage_engine=InnoDB
+innodb_buffer_pool_size = 6G
+innodb_doublewrite = 0
+innodb_flush_log_at_trx_commit=0
+gtid_domain_id = 501
+gtid_strict_mode = ON
+EOT
+
+systemctl start mariadb
+
+
+apt-get install -y gcc cpanminus libmysqlclient-dev libdbi-perl libjson-xs-perl libjson-perl libdatetime-format-iso8601-perl
+
+for m in DBD::MariaDB Starman Net::WebSocket::Server Crypt::Digest::RIPEMD160; do cpanm --notest $m; done
+
+git clone https://github.com/cc32d9/eosio_light_api.git /opt/eosio_light_api
+
+cd /opt/eosio_light_api/sql
+mysql < lightapi_dbcreate.sql
+for n in wax; do sh create_tables.sh $n; done
+
+cd /opt/eosio_light_api/setup
+for n in wax; do sh add_${n}_mainnet.sh; done
+
+cat >/etc/cron.d/lightapi <<'EOT'
+*/5 * * * * root perl /opt/eosio_light_api/scripts/lightapi_holdercounts.pl
+EOT
+
+echo 'DBWRITE_OPTS="--port=8105"' >/etc/default/lightapi_wax
+
+
+cd /opt/eosio_light_api/systemd
+sh install_systemd_dbwrite.sh wax
+
+sh install_systemd_api.sh
+
+curl -sL https://deb.nodesource.com/setup_22.x | bash -
+apt install -y nodejs
+cd /opt/eosio_light_api/wsapi
+npm install
+
+cd /opt/eosio_light_api/systemd
+sh install_systemd_wsapi.sh 5101
+
+
+mkdir -p /srv/wax/chronicle-config
+cat >/srv/wax/chronicle-config/config.ini <<'EOT'
+host = 10.0.3.1
+port = 8080
+mode = scan
+receiver-state-db-size = 16384
+plugin = exp_ws_plugin
+exp-ws-host = 127.0.0.1
+exp-ws-port = 8105
+exp-ws-bin-header = true
+skip-block-events = true
+skip-traces = true
+blacklist-tables-contract = m.federation
+blacklist-tables-contract = atomicassets
+blacklist-tables-contract = atomicmarket
+blacklist-tables-contract = farmersworld
+blacklist-tables-contract = farminggames
+blacklist-tables-contract = simpleassets
+blacklist-tables-contract = sales.nft
+EOT
+
+
+# Use the start block that the ship server reports for state history
+# The initialization will take a few hours
+
+cd
+nohup /usr/local/sbin/chronicle-receiver --config-dir=/srv/wax/chronicle-config --data-dir=/srv/wax/chronicle-data --start-block=400834812 &
+
+# check the writer. The initialization is complete when you see ack past the first block
+# The whole initialization will take approximately 9 hours.
+
+journalctl -u lightapi_dbwrite@wax -f
+
+# Chronicle will exit because the ship node is not sending any new blocks:
+info  2025-10-31T21:51:03.484 chronicle receiver_plugin.cpp:571       check_pause          ] Pausing the reader
+info  2025-10-31T21:51:04.063 chronicle exp_ws_plugin.cpp:355         push_msg             ] exp_ws_plugin queue_size=1
+info  2025-10-31T21:51:04.160 chronicle exp_ws_plugin.cpp:355         push_msg             ] exp_ws_plugin queue_size=230
+info  2025-10-31T21:51:04.200 chronicle receiver_plugin.cpp:883       receive_block        ] Crossing irreversible block=400838712
+info  2025-10-31T21:51:04.229 chronicle exp_ws_plugin.cpp:355         push_msg             ] exp_ws_plugin queue_size=10230
+info  2025-10-31T21:51:04.297 chronicle exp_ws_plugin.cpp:355         push_msg             ] exp_ws_plugin queue_size=20230
+info  2025-10-31T21:51:04.361 chronicle exp_ws_plugin.cpp:355         push_msg             ] exp_ws_plugin queue_size=30230
+error 2025-10-31T21:51:23.794 chronicle receiver_plugin.cpp:588       check_stale_head     ] Did not receive anything in 10000 milliseconds. Aborting the receiver
+info  2025-10-31T21:51:23.795 chronicle receiver_plugin.cpp:1348      close                ] closed the receiver websocket connection
+info  2025-10-31T21:51:23.795 chronicle receiver_plugin.cpp:1878      plugin_shutdown      ] receiver_plugin stopped
+info  2025-10-31T21:51:23.795 chronicle exp_ws_plugin.cpp:239         close_ws             ] Closing the export websocket connection to 127.0.0.1:8105
+info  2025-10-31T21:51:23.795 chronicle exp_ws_plugin.cpp:486         plugin_shutdown      ] exp_ws_plugin stopped
+info  2025-10-31T21:51:23.795 chronicle decoder_plugin.cpp:664        plugin_shutdown      ] decoder_plugin stopped
+
+
+
+# edit the chronicle config to point to th elive ship server and install the service
+
+cd /opt/eosio_light_api/systemd
+sh install_systemd_chronicle.sh wax
+
+
+# Create an archive
+
+systemctl stop 'chronicle_receiver@*'
+cd /var/local/
+for d in `ls /srv/`; do chronicle-receiver --config-dir=/srv/$d/chronicle-config/ --data-dir=/srv/$d/chronicle-data --save-snapshot=$d.snapshot;  done
+
+mysqldump --gtid --all-databases | gzip -1 > lightapi.sqldump.gz
+
+
+
+
+
+
